@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+:root {
+  /* 纸质风格配色 (Paper-like Palette) */
+  --background: #F9F7F2; /* 象牙白/再生纸色 */
+  --foreground: #2C2C2C; /* 深灰黑 */
+  
+  --card: #FFFFFF;
+  --card-foreground: #2C2C2C;
+  
+  --popover: #FFFFFF;
+  --popover-foreground: #2C2C2C;
+  
+  --primary: #2C2C2C;
+  --primary-foreground: #F9F7F2;
+  
+  --secondary: #F1EDE4;
+  --secondary-foreground: #2C2C2C;
+  
+  --muted: #F1EDE4;
+  --muted-foreground: #7A7468;
+  
+  --accent: #E5E1D8;
+  --accent-foreground: #2C2C2C;
+  
+  --destructive: #7F1D1D;
+  --destructive-foreground: #F9F7F2;
+  
+  --border: #E5E1D8;
+  --input: #E5E1D8;
+  --ring: #7A7468;
+  
+  --radius: 0.25rem;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-serif), Georgia, serif;
+}
+
+.font-sans {
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* 纸质质感微调 */
+.paper-shadow {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.paper-border {
+  border: 1px solid var(--border);
+}
