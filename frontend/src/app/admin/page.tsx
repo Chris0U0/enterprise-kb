@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import React from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,10 @@ import {
   ChevronRight,
   Database,
   ArrowUpRight,
-  Zap
+  Zap,
+  Lock,
+  Terminal,
+  ArrowRight
 } from "lucide-react";
 
 export default function AdminConsolePage() {
@@ -178,63 +182,68 @@ export default function AdminConsolePage() {
 
           {/* 3. 全局配置 */}
           <TabsContent value="settings" className="mt-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <AdminLinkCard 
+                title="页面 A：入库审批" 
+                desc="核心文档人工核验流水" 
+                href="/admin/approval" 
+                icon={<ShieldCheck size={24} />} 
+              />
+              <AdminLinkCard 
+                title="页面 B：指令编排" 
+                desc="Agent 提示词与工具管理" 
+                href="/admin/agent" 
+                icon={<Terminal size={24} />} 
+              />
+              <AdminLinkCard 
+                title="页面 C：资源配额" 
+                desc="部门存储与 Token 计费" 
+                href="/admin/resource" 
+                icon={<Database size={24} />} 
+              />
+              <AdminLinkCard 
+                title="页面 D：合规脱敏" 
+                desc="PII 识别与异常行为审计" 
+                href="/admin/security" 
+                icon={<Lock size={24} />} 
+              />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
               <Card className="paper-border">
                 <CardHeader>
                   <CardTitle className="text-base font-serif italic">安全与合规配置</CardTitle>
                   <CardDescription>配置审计日志保留期限与不可变哈希策略。</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between p-4 border border-border rounded-sm">
-                    <div className="space-y-1">
-                      <p className="text-sm font-bold">审计日志永久化 (Persistent Audit)</p>
-                      <p className="text-xs text-muted-foreground">启用后日志将写入物理不可写介质，满足金融级审计需求。</p>
-                    </div>
-                    <Badge className="bg-green-500">已启用</Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-4 border border-border rounded-sm">
-                    <div className="space-y-1">
-                      <p className="text-sm font-bold">强制 MD5 多级校验 (Strict MD5)</p>
-                      <p className="text-xs text-muted-foreground">所有文件在进入 RAG 向量库前必须通过三层校验。</p>
-                    </div>
-                    <Badge className="bg-primary">已启用</Badge>
-                  </div>
+                  {/* ... (existing content) */}
                 </CardContent>
               </Card>
-
-              <Card className="paper-border">
-                <CardHeader>
-                  <CardTitle className="text-base font-serif italic">系统数据源看板</CardTitle>
-                  <CardDescription>连接的数据库与向量索引状态。</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="p-4 bg-muted/30 border border-border rounded-sm flex items-center justify-between group cursor-pointer hover:bg-muted/50 transition-colors">
-                     <div className="flex items-center gap-3">
-                        <Database size={20} className="text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-bold">Vector DB: Pinecone / Milvus</p>
-                          <p className="text-xs text-muted-foreground">已托管 1.2M 向量, 平均检索延迟 12ms</p>
-                        </div>
-                     </div>
-                     <ArrowUpRight size={16} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  <div className="p-4 bg-muted/30 border border-border rounded-sm flex items-center justify-between group cursor-pointer hover:bg-muted/50 transition-colors">
-                     <div className="flex items-center gap-3">
-                        <Zap size={20} className="text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-bold">Knowledge Graph: Neo4j</p>
-                          <p className="text-xs text-muted-foreground">3.4k 节点, 12k 关系, 实体提取完整度 94%</p>
-                        </div>
-                     </div>
-                     <ArrowUpRight size={16} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </CardContent>
-              </Card>
+              {/* ... (existing content) */}
             </div>
           </TabsContent>
 
         </Tabs>
       </div>
     </div>
+  );
+}
+
+function AdminLinkCard({ title, desc, href, icon }: { title: string, desc: string, href: string, icon: React.ReactNode }) {
+  return (
+    <Link href={href}>
+      <Card className="paper-border hover:border-primary/40 hover:shadow-md transition-all cursor-pointer h-full group">
+        <CardHeader className="p-6">
+          <div className="w-12 h-12 bg-primary/5 rounded-sm flex items-center justify-center text-primary mb-4 group-hover:scale-110 transition-transform">
+            {icon}
+          </div>
+          <CardTitle className="text-base font-serif italic mb-2">{title}</CardTitle>
+          <CardDescription className="text-xs leading-relaxed">{desc}</CardDescription>
+        </CardHeader>
+        <CardContent className="p-6 pt-0 flex justify-end">
+           <ArrowUpRight size={16} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+        </CardContent>
+      </Card>
+    </Link>
   );
 }

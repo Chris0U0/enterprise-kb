@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   Home, 
+  FolderKanban,
   BookOpen, 
   Library, 
   Network, 
@@ -24,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 
 const navItems = [
   { href: '/', label: '全局工作台', icon: Home },
+  { href: '/projects', label: '项目管理', icon: FolderKanban },
   { href: '/copilot', label: 'AI 研读室', icon: BookOpen },
   { href: '/knowledge', label: '知识库管理', icon: Library },
   { href: '/graph', label: '图谱探索', icon: Network },

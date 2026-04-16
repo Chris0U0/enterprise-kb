@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import React from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -85,9 +86,11 @@ export default function WorkspacePage() {
                       </div>
                     </div>
                     <div className="mt-6 flex justify-end">
-                      <Button variant="ghost" size="sm" className="gap-1 text-xs">
-                        进入项目 <ArrowRight size={14} />
-                      </Button>
+                      <Link href={`/projects/${project.id}`}>
+                        <Button variant="ghost" size="sm" className="gap-1 text-xs hover:bg-primary/5 hover:text-primary">
+                          进入项目 <ArrowRight size={14} />
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
