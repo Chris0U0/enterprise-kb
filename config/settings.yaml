@@ -1,0 +1,55 @@
+# 企业项目知识库平台 — 环境配置
+# 此文件为参考示例，实际配置通过 .env 或环境变量注入
+
+app:
+  env: development
+  log_level: INFO
+  max_upload_size_mb: 100
+
+retrieval:
+  dense_weight: 0.4
+  sparse_weight: 0.4
+  colbert_weight: 0.2
+  reranker_top_k: 5
+  candidate_count: 40
+  chunk_size: 512
+  chunk_overlap: 64
+
+conversion:
+  supported_formats:
+    - pdf
+    - docx
+    - doc
+    - pptx
+    - ppt
+    - xlsx
+    - xls
+    - csv
+    - png
+    - jpg
+    - jpeg
+    - gif
+    - webp
+    - mp3
+    - mp4
+    - wav
+    - m4a
+    - webm
+    - url
+
+mcp_tools:
+  - list_documents
+  - get_document_outline
+  - search_sections
+  - read_section
+
+knowledge_bases:
+  industry:
+    scope: global_readonly
+    description: "行业知识库 — 公开规范/标准术语/法规"
+  enterprise:
+    scope: org_isolated
+    description: "企业知识库 — 内部概念/缩写/流程"
+  project:
+    scope: project_isolated
+    description: "项目知识库 — 严格 project_id 物理隔离"
