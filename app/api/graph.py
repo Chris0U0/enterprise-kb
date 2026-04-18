@@ -9,8 +9,10 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import require_project_admin, require_project_editor, require_project_member
 from app.core.database import get_db
 from app.core.config import get_settings
+from app.models.database import User
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -19,7 +21,10 @@ router = APIRouter(prefix="/graph", tags=["GraphRAG"])
 
 
 @router.get("/entities/{project_id}")
-async def list_entity_types(project_id: uuid.UUID):
+async def list_entity_types(
+    project_id: uuid.UUID,
+    _: tuple = Depends(require_project_member),
+):
     """获取项目中所有实体类型及数量"""
     _check_enabled()
     from app.services.graph.store import get_graph_store
@@ -33,6 +38,7 @@ async def get_neighbors(
     entity_name: str = Query(...),
     project_id: uuid.UUID = Query(...),
     depth: int = Query(default=1, ge=1, le=3),
+    _: tuple = Depends(require_project_member),
 ):
     """查找实体的邻居（1-3 度）"""
     _check_enabled()
@@ -50,6 +56,7 @@ async def get_neighbors(
 async def graph_query(
     query: str = Query(..., min_length=1),
     project_id: uuid.UUID = Query(...),
+    _: tuple = Depends(require_project_member),
 ):
     """自然语言图查询"""
     _check_enabled()
@@ -65,6 +72,7 @@ async def graph_query(
 async def trigger_extraction(
     doc_id: uuid.UUID,
     project_id: uuid.UUID = Query(...),
+    _: tuple = Depends(require_project_editor),
     db: AsyncSession = Depends(get_db),
 ):
     """手动触发单个文档的实体关系抽取"""
@@ -103,7 +111,10 @@ async def trigger_extraction(
 
 
 @router.delete("/project/{project_id}")
-async def delete_project_graph(project_id: uuid.UUID):
+async def delete_project_graph(
+    project_id: uuid.UUID,
+    _: User = Depends(require_project_admin),
+):
     """删除项目的全部图数据"""
     _check_enabled()
     from app.services.graph.store import get_graph_store

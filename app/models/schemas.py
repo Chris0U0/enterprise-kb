@@ -295,6 +295,15 @@ class ProjectListItem(BaseModel):
     pending_summary: str
 
 
+class ProjectListResponse(BaseModel):
+    """项目列表分页（与筛选条件一致的 total）"""
+
+    items: list[ProjectListItem]
+    total: int
+    page: int
+    page_size: int
+
+
 class ProjectOnboarding(BaseModel):
     has_uploaded_doc: bool
     has_indexed_knowledge: bool

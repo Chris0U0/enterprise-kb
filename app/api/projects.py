@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import uuid
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +20,7 @@ from app.models.schemas import (
     ProjectDetail,
     ProjectHealthMetrics,
     ProjectListItem,
+    ProjectListResponse,
     ProjectMemberAdd,
     ProjectMemberItem,
     ProjectMemberRoleUpdate,
@@ -128,7 +131,7 @@ def _pending_summary_placeholder() -> str:
     return "—"
 
 
-@router.get("", response_model=list[ProjectListItem])
+@router.get("", response_model=ProjectListResponse)
 async def list_projects(
     q: str | None = Query(default=None, description="名称/描述模糊搜索"),
     page: int = Query(default=1, ge=1),
@@ -136,6 +139,12 @@ async def list_projects(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    count_stmt = (
+        select(func.count())
+        .select_from(Project)
+        .join(ProjectMember, ProjectMember.project_id == Project.id)
+        .where(ProjectMember.user_id == user.id)
+    )
     stmt = (
         select(Project)
         .join(ProjectMember, ProjectMember.project_id == Project.id)
@@ -143,9 +152,13 @@ async def list_projects(
     )
     if q and q.strip():
         kw = f"%{q.strip()}%"
+        count_stmt = count_stmt.where(
+            or_(Project.name.ilike(kw), Project.description.ilike(kw)),
+        )
         stmt = stmt.where(
             or_(Project.name.ilike(kw), Project.description.ilike(kw)),
         )
+    total = int((await db.execute(count_stmt)).scalar_one())
     stmt = stmt.order_by(Project.updated_at.desc())
 
     # 分页：先取 id 再组装（数据量可控）
@@ -180,7 +193,12 @@ async def list_projects(
                 pending_summary=_pending_summary_placeholder(),
             )
         )
-    return items
+    return ProjectListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("", response_model=ProjectDetail, status_code=status.HTTP_201_CREATED)

@@ -104,3 +104,25 @@ async def require_project_admin(
     if role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要项目管理员权限")
     return u
+
+
+async def ensure_project_member(
+    project_id: uuid.UUID,
+    user: User,
+    db: AsyncSession,
+) -> str:
+    """在已解析出 `User` 的场景下校验项目成员（用于 body 中含 project_id 的接口）。"""
+    role = await get_project_member_role(project_id, user.id, db)
+    if role is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该项目")
+    return role
+
+
+async def ensure_project_editor(
+    project_id: uuid.UUID,
+    user: User,
+    db: AsyncSession,
+) -> None:
+    role = await ensure_project_member(project_id, user, db)
+    if role not in ("admin", "editor"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要编辑者或管理员权限")

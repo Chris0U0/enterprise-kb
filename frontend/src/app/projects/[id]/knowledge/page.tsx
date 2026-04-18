@@ -51,7 +51,7 @@ export default function ProjectKnowledgePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground leading-relaxed">
-            推荐接口：`GET /api/v1/documents?project_id=…`；上传时携带项目上下文，与 `Document` 模型对齐。
+            推荐接口：`GET /api/v1/documents/list/{project_id}`（需 Bearer）；上传 `POST /api/v1/documents/upload`，与 `Document` 模型对齐。
           </CardContent>
         </Card>
 

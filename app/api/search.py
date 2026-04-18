@@ -13,8 +13,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import ensure_project_member, get_current_user
 from app.core.database import get_db
 from app.core.config import get_settings
+from app.models.database import User
 from app.models.schemas import SearchRequest, SearchResponse, SearchResult
 from app.services.retrieval.router import route_query, RetrievalStrategy
 from app.services.retrieval.searcher import get_searcher
@@ -34,6 +36,7 @@ router = APIRouter(prefix="/search", tags=["Search"])
 @router.post("/", response_model=SearchResponse)
 async def search(
     request: SearchRequest,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -45,6 +48,7 @@ async def search(
     8. Agentic 路径判断  9. 术语注入
     10. 答案生成 + 引用  11. 审计日志
     """
+    await ensure_project_member(request.project_id, user, db)
     start_time = time.time()
     project_id_str = str(request.project_id)
 
@@ -128,6 +132,7 @@ async def search_stream(
     query: str = Query(..., min_length=1, max_length=2000),
     project_id: uuid.UUID = Query(...),
     top_k: int = Query(default=5, ge=1, le=20),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -141,6 +146,7 @@ async def search_stream(
       - done:     完成信号 + 统计信息
       - error:    错误信息
     """
+    await ensure_project_member(project_id, user, db)
     project_id_str = str(project_id)
 
     # 路由决策
@@ -172,6 +178,7 @@ async def search_stream(
 async def invoke_skill(
     skill_name: str,
     request: SearchRequest,
+    user: User = Depends(get_current_user),
     doc_ids: Optional[list[uuid.UUID]] = None,
     params: Optional[dict] = None,
 ):
@@ -184,6 +191,7 @@ async def invoke_skill(
     - project_health: 项目健康评估
     - report_generation: 报告生成
     """
+    await ensure_project_member(request.project_id, user, db)
     from app.services.skills.base import get_skill, get_all_skills, SkillInput
 
     skill = get_skill(skill_name)
@@ -214,7 +222,7 @@ async def invoke_skill(
 
 
 @router.get("/skills")
-async def list_skills():
+async def list_skills(_user: User = Depends(get_current_user)):
     """列出所有已注册的 Skills"""
     from app.services.skills.base import get_all_skills
 

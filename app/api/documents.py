@@ -22,9 +22,10 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import ensure_project_editor, ensure_project_member, get_current_user
 from app.core.database import get_db
 from app.core.config import get_settings
-from app.models.database import Document, AuditLog
+from app.models.database import Document, User
 from app.models.schemas import DocumentInfo, DocumentUploadResponse, ConversionStatus
 from app.services.conversion.pipeline import detect_format, SUPPORTED_FORMATS
 from app.utils.checksum import compute_md5
@@ -39,7 +40,8 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 async def upload_document(
     file: UploadFile = File(...),
     project_id: uuid.UUID = Form(...),
-    upload_by: uuid.UUID = Form(...),
+    user: User = Depends(get_current_user),
+    upload_by: uuid.UUID | None = Form(default=None),
     stage: str = Form(default="执行阶段"),
     db: AsyncSession = Depends(get_db),
 ):
@@ -54,10 +56,17 @@ async def upload_document(
     5. 派发 Celery 异步任务（转换+索引）
     6. 立即返回 doc_id，前端轮询 GET /documents/{doc_id} 查看状态
 
+    需登录；`upload_by` 可省略（默认当前用户），若填写须与 Token 用户一致。
+
     如果 MinIO 或 DB 操作失败，执行回滚：
     - MinIO 失败 → 直接返回错误
     - DB 失败 → 清理已上传的 MinIO 文件
     """
+    await ensure_project_editor(project_id, user, db)
+    effective_upload = user.id
+    if upload_by is not None and upload_by != user.id:
+        raise HTTPException(status_code=400, detail="upload_by 须与当前登录用户一致")
+
     # ── 1. 验证 ──────────────────────────────────────────
     file_data = await file.read()
     if len(file_data) > settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024:
@@ -98,7 +107,7 @@ async def upload_document(
             source_path=source_path,
             checksum=checksum,
             file_size_bytes=len(file_data),
-            upload_by=upload_by,
+            upload_by=effective_upload,
             conversion_status="pending",
         )
         db.add(doc)
@@ -120,7 +129,7 @@ async def upload_document(
             project_id=str(project_id),
             filename=file.filename,
             source_format=source_format,
-            upload_by=str(upload_by),
+            upload_by=str(effective_upload),
             stage=stage,
         )
         logger.info(f"Celery 任务已派发: doc_id={doc_id}, file={file.filename}")
@@ -130,7 +139,7 @@ async def upload_document(
         await _fallback_sync_process(
             db=db, doc_id=doc_id, project_id=project_id,
             file_data=file_data, filename=file.filename,
-            source_format=source_format, upload_by=upload_by, stage=stage,
+            source_format=source_format, upload_by=effective_upload, stage=stage,
         )
 
     # ── 6. 立即返回 ─────────────────────────────────────
@@ -242,10 +251,12 @@ async def _index_document(
 @router.get("/list/{project_id}", response_model=list[DocumentInfo])
 async def list_documents(
     project_id: uuid.UUID,
+    user: User = Depends(get_current_user),
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    """列出项目中的所有文档"""
+    """列出项目中的所有文档（需为项目成员）"""
+    await ensure_project_member(project_id, user, db)
     query = select(Document).where(Document.project_id == project_id)
     if status:
         query = query.where(Document.conversion_status == status)
@@ -258,6 +269,7 @@ async def list_documents(
 @router.get("/{doc_id}", response_model=DocumentInfo)
 async def get_document(
     doc_id: uuid.UUID,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -268,12 +280,14 @@ async def get_document(
     doc = result.scalar_one_or_none()
     if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在")
+    await ensure_project_member(doc.project_id, user, db)
     return DocumentInfo.model_validate(doc)
 
 
 @router.get("/{doc_id}/markdown")
 async def get_document_markdown(
     doc_id: uuid.UUID,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """获取文档的 Markdown 内容"""
@@ -281,6 +295,7 @@ async def get_document_markdown(
     doc = result.scalar_one_or_none()
     if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在")
+    await ensure_project_member(doc.project_id, user, db)
 
     if doc.conversion_status != "completed":
         raise HTTPException(
@@ -297,13 +312,15 @@ async def get_document_markdown(
 @router.delete("/{doc_id}")
 async def delete_document(
     doc_id: uuid.UUID,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """删除文档及其所有索引"""
+    """删除文档及其所有索引（需编辑者或管理员）"""
     result = await db.execute(select(Document).where(Document.id == doc_id))
     doc = result.scalar_one_or_none()
     if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在")
+    await ensure_project_editor(doc.project_id, user, db)
 
     # 删除向量索引
     try:

@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
     MAX_UPLOAD_SIZE_MB: int = 100
+    # CORS：逗号分隔多个 Origin；`*` 表示任意来源（此时不会开启 allow_credentials，避免与浏览器规范冲突）
+    CORS_ORIGINS: str = "*"
 
     # ── Auth (JWT) ───────────────────────────────────────
     JWT_SECRET_KEY: str = "change-me-in-production-use-long-random-string"
@@ -115,6 +117,16 @@ class Settings(BaseSettings):
     RAGAS_SAMPLE_RATE: float = 0.05
     RAGAS_DAILY_SAMPLE_SIZE: int = 50
     RAGAS_MIN_THRESHOLD: float = 0.7
+
+    def cors_origin_list(self) -> list[str]:
+        raw = (self.CORS_ORIGINS or "").strip()
+        if not raw or raw == "*":
+            return ["*"]
+        parts = [x.strip() for x in raw.split(",") if x.strip()]
+        return ["*"] if "*" in parts else parts
+
+    def cors_allow_credentials(self) -> bool:
+        return self.cors_origin_list() != ["*"]
 
 
 @lru_cache()

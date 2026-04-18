@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.core.errors import register_exception_handlers
 from app.api.documents import router as documents_router
 from app.api.search import router as search_router
 from app.api.mcp import router as mcp_router
@@ -124,11 +125,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+register_exception_handlers(app)
+
+# CORS：见 Settings.cors_origin_list；通配 `*` 时不启用 credentials（浏览器规范）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=settings.cors_origin_list(),
+    allow_credentials=settings.cors_allow_credentials(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -149,7 +152,7 @@ async def root():
     skills = get_all_skills()
     return {
         "name": "企业项目知识库平台",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "phase": "Phase 1 + Phase 2",
         "modules": {
             "phase_1": [
@@ -165,13 +168,20 @@ async def root():
                 "Contextual Retrieval",
             ],
         },
+        "api_prefix": "/api/v1",
+        "openapi": "/docs",
         "endpoints": {
+            "health": "GET /api/v1/health",
+            "auth": "/api/v1/auth",
+            "projects": "/api/v1/projects",
+            "documents": "/api/v1/documents",
             "search": "POST /api/v1/search/",
-            "stream": "GET  /api/v1/search/stream?query=...&project_id=...",
+            "stream": "GET /api/v1/search/stream?query=...&project_id=...",
             "skills": "POST /api/v1/search/skill/{skill_name}",
-            "skills_list": "GET  /api/v1/search/skills",
+            "skills_list": "GET /api/v1/search/skills",
             "upload": "POST /api/v1/documents/upload",
             "mcp": "/api/v1/mcp/{tool_name}",
+            "graph": "/api/v1/graph",
         },
     }
 
