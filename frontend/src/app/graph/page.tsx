@@ -5,7 +5,7 @@ import React, { useState, useCallback } from 'react';
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useProject } from "@/hooks/use-project";
-import { getProjectRecord } from "@/data/project-registry";
+import { fallbackProjectRecord } from "@/data/project-registry";
 import ReactFlow, {
   Background,
   Controls,
@@ -87,7 +87,7 @@ export default function GraphExplorerPage() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId") ?? "1";
   const { project: projectCtx } = useProject(projectId);
-  const graphProject = projectCtx ?? getProjectRecord(projectId);
+  const graphProject = projectCtx ?? fallbackProjectRecord(projectId);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);

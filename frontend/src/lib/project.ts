@@ -1,6 +1,6 @@
-import { getProjectRecord } from "@/data/project-registry";
+import { fallbackProjectRecord } from "@/data/project-registry";
 
-/** @deprecated 请优先使用 useProject / getProjectRecord */
+/** 同步占位名；真实名称请用 `useProject` 拉取后端 */
 export function getProjectDisplayName(projectId: string): string {
-  return getProjectRecord(projectId).name;
+  return fallbackProjectRecord(projectId).name;
 }

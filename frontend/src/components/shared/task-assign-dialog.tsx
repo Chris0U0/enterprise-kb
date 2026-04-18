@@ -8,7 +8,7 @@ import { X, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FocusItem } from "./today-focus";
 
-type ProjectOption = { id: number; name: string };
+type ProjectOption = { id: string; name: string };
 
 export function TaskAssignDialog({
   projects,
@@ -34,7 +34,7 @@ export function TaskAssignDialog({
 
   const [title, setTitle] = useState("");
   const [assignee, setAssignee] = useState("");
-  const [projectId, setProjectId] = useState(String(projects[0]?.id ?? 1));
+  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
   const [dueHint, setDueHint] = useState("");
 
   useEffect(() => {
@@ -47,8 +47,7 @@ export function TaskAssignDialog({
     e.preventDefault();
     const t = title.trim();
     if (!t) return;
-    const pid = Number(projectId);
-    const proj = projects.find((p) => p.id === pid) ?? projects[0];
+    const proj = projects.find((p) => p.id === projectId) ?? projects[0];
     if (!proj) return;
 
     const item: FocusItem = {

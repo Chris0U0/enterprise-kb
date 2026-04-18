@@ -35,7 +35,8 @@ import {
   UsersRound
 } from "lucide-react";
 import { useProject } from "@/hooks/use-project";
-import { getProjectRecord } from "@/data/project-registry";
+import { useProjectMembers } from "@/hooks/use-project-members";
+import { useProjectDocuments } from "@/hooks/use-project-documents";
 import { ProjectOnboarding } from "@/components/project/project-onboarding";
 import { ProactiveSummaryCard } from "@/components/project/proactive-summary-card";
 
@@ -44,22 +45,34 @@ export default function ProjectDashboardPage() {
   const pathname = usePathname();
   const id = params.id as string;
   const { user } = useAuth();
-  const { project: meta } = useProject(id);
-  const record = meta ?? getProjectRecord(id);
+  const { project: meta, isLoading: projectLoading } = useProject(id);
+  const { members: memberRows, loading: membersLoading } = useProjectMembers(id);
+  const { docs: docRows, loading: docsLoading } = useProjectDocuments(id);
 
   // 权限检查辅助函数
   const canManage = user?.role === 'Admin' || user?.role === 'Editor';
 
-  // Mock 项目数据（名称/阶段/引导与 project-registry 对齐）
+  if (projectLoading || !meta) {
+    return (
+      <AppPage surface="canvas">
+        <div className="flex justify-center py-24 text-sm text-muted-foreground">加载项目信息…</div>
+      </AppPage>
+    );
+  }
+
+  const record = meta;
+  const healthMetrics = record.health ?? { progress: 0, risk: 0, quality: 0 };
+
   const project = {
     id,
     name: record.name,
-    health: { progress: 85, risk: 12, quality: 92 },
-    members: [
-      { id: 1, name: "张三", role: "Admin", email: "zhangsan@example.com" },
-      { id: 2, name: "李四", role: "Editor", email: "lisi@example.com" },
-      { id: 3, name: "王五", role: "Viewer", email: "wangwu@example.com" },
-    ],
+    health: { progress: healthMetrics.progress, risk: healthMetrics.risk, quality: healthMetrics.quality },
+    members: memberRows.map((m) => ({
+      id: m.user_id,
+      name: m.name,
+      role: m.role,
+      email: m.email,
+    })),
     timeline: [
       { date: "2026-03-01", event: "项目启动", status: "completed" },
       { date: "2026-03-15", event: "需求文档 V1 归档", status: "completed" },
@@ -178,6 +191,9 @@ export default function ProjectDashboardPage() {
         </Card>
 
         <ProjectOnboarding projectId={id} flags={record.onboarding} className="mb-6" />
+        {membersLoading || docsLoading ? (
+          <p className="mb-4 text-xs text-muted-foreground">同步成员与文档列表…</p>
+        ) : null}
 
         {/* 核心仪表盘网格 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -278,20 +294,19 @@ export default function ProjectDashboardPage() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-               {[
-                 { name: "需求文档_V1.pdf", size: "2.4MB", date: "2026-03-15" },
-                 { name: "架构设计说明书.pdf", size: "4.1MB", date: "2026-04-01" },
-                 { name: "接口协议定义.md", size: "120KB", date: "2026-04-10" }
-               ].map((doc, i) => (
-                 <Card key={i} className="paper-border group hover:border-primary/30 transition-all">
+               {docRows.length === 0 && !docsLoading ? (
+                 <p className="text-sm text-muted-foreground col-span-full">暂无文档，上传后将显示解析状态。</p>
+               ) : null}
+               {docRows.map((doc) => (
+                 <Card key={doc.id} className="paper-border group hover:border-primary/30 transition-all">
                     <CardContent className="p-4 flex gap-4 items-center">
                        <div className="w-10 h-10 bg-muted flex items-center justify-center rounded-sm shrink-0">
                           <FileText size={20} className="text-muted-foreground" />
                        </div>
                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-sm truncate font-serif italic">{doc.name}</p>
+                          <p className="font-bold text-sm truncate font-serif italic">{doc.original_filename}</p>
                           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold font-sans">
-                            {doc.size} · {doc.date}
+                            {doc.file_size_bytes != null ? `${(doc.file_size_bytes / 1024 / 1024).toFixed(2)} MB` : "—"} · {doc.conversion_status}
                           </p>
                        </div>
                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -320,8 +335,8 @@ export default function ProjectDashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {project.members.map(member => (
-                    <div key={member.id} className="flex items-center justify-between p-3 border border-border rounded-sm hover:bg-muted/30 transition-colors">
+                  {project.members.map((member) => (
+                    <div key={String(member.id)} className="flex items-center justify-between p-3 border border-border rounded-sm hover:bg-muted/30 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center font-bold text-xs">{member.name[0]}</div>
                         <div>

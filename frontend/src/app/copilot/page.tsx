@@ -12,25 +12,22 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { BookOpen, Search, Send, FileText, Loader2 } from "lucide-react";
 import { useProject } from "@/hooks/use-project";
+import { useProjectList } from "@/hooks/use-project-list";
 import { useSearchStreamMock } from "@/hooks/use-search-stream-mock";
 import { SearchProgressPanel } from "@/components/copilot/search-progress-panel";
 import { CitationList, type CitationItem } from "@/components/copilot/citation-list";
 import { AnswerActions } from "@/components/copilot/answer-actions";
-import { PROJECT_REGISTRY } from "@/data/project-registry";
 import { projectPath, withProjectQuery } from "@/lib/project-links";
-
-const PROJECT_OPTIONS = Object.values(PROJECT_REGISTRY).map((p) => ({
-  id: Number(p.id),
-  name: p.name,
-}));
 
 const DEFAULT_SNIPPET =
   "根据需求文档，系统需在上传时计算 MD5 并写入审计日志，以满足审计合规要求。";
 
 export default function CopilotPage() {
   const searchParams = useSearchParams();
-  const projectId = searchParams.get("projectId") ?? "1";
-  const { project: meta } = useProject(projectId);
+  const { items: projectList } = useProjectList();
+  const PROJECT_OPTIONS = projectList.map((p) => ({ id: p.id, name: p.name }));
+  const resolvedProjectId = searchParams.get("projectId") ?? projectList[0]?.id ?? undefined;
+  const { project: meta } = useProject(resolvedProjectId);
 
   const { steps, running, run } = useSearchStreamMock();
   const [input, setInput] = useState("");
@@ -64,9 +61,9 @@ export default function CopilotPage() {
         breadcrumbs={breadcrumbsFromPathname("/copilot")}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Link href={`/projects/${projectId}`} className="inline-flex">
+                    <Link href={resolvedProjectId ? `/projects/${resolvedProjectId}` : "/projects"} className="inline-flex">
               <Badge variant="secondary" className="font-sans">
-                项目: {meta.name}
+                项目: {meta?.name ?? "—"}
               </Badge>
             </Link>
             <Badge variant="outline" className="border-border bg-white/50 font-sans">
@@ -86,7 +83,7 @@ export default function CopilotPage() {
       />
 
       <div className="flex min-h-[min(100dvh,920px)] flex-1 flex-col lg:min-h-[calc(100dvh-12rem)]">
-        <ResizablePanelGroup direction="horizontal" className="min-h-[560px] flex-1">
+        <ResizablePanelGroup orientation="horizontal" className="min-h-[560px] flex-1">
           {/* 左侧：会话与思考区 */}
           <ResizablePanel defaultSize={45} minSize={30}>
             <div className="flex h-full flex-col bg-background p-4 sm:p-6">
@@ -98,14 +95,14 @@ export default function CopilotPage() {
                   ：{" "}
                   <Link
                     className="text-primary underline-offset-2 hover:underline"
-                    href={withProjectQuery("/knowledge", projectId)}
+                    href={withProjectQuery("/knowledge", resolvedProjectId ?? "")}
                   >
                     知识库
                   </Link>
                   {" · "}
                   <Link
                     className="text-primary underline-offset-2 hover:underline"
-                    href={projectPath(projectId, "artifacts")}
+                    href={projectPath(resolvedProjectId ?? "", "artifacts")}
                   >
                     产出物
                   </Link>
@@ -136,9 +133,9 @@ export default function CopilotPage() {
     return calculate_hash(file_path)`}
                       </div>
                     </div>
-                    <CitationList items={citations} projectId={projectId} />
+                    <CitationList items={citations} projectId={resolvedProjectId ?? ""} />
                     <AnswerActions
-                      projectId={projectId}
+                      projectId={resolvedProjectId ?? ""}
                       projects={PROJECT_OPTIONS}
                       defaultSnippet={DEFAULT_SNIPPET}
                     />

@@ -24,7 +24,7 @@ export default function LoginPage() {
     try {
       await login(email, password);
     } catch (err) {
-      setError('登录失败，请重试');
+      setError(err instanceof Error ? err.message : "登录失败，请重试");
     }
   };
 

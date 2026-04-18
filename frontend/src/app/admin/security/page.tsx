@@ -159,7 +159,7 @@ export default function SecurityCenterPage() {
                                     ACTION: {event.action.toUpperCase()}
                                  </Badge>
                                  <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold gap-1 underline underline-offset-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    查看取证详情 <ArrowRight size={10} />
+                                    查看取证详情 <ChevronRight size={10} />
                                  </Button>
                               </div>
                            </div>

@@ -1,8 +1,9 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import React, { useMemo, useState } from 'react';
-import Link from 'next/link';
+import React, { useMemo, useState } from "react";
+import Link from "next/link";
+import { useProjectList } from "@/hooks/use-project-list";
 import { AppPage, PageHeader, PageSection } from "@/components/shared/page-layout";
 import { TodayFocus, type FocusItem } from "@/components/shared/today-focus";
 import { TaskAssignDialog } from "@/components/shared/task-assign-dialog";
@@ -21,6 +22,13 @@ import {
   ShieldCheck,
   Plus
 } from "lucide-react";
+
+function formatShort(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" });
+}
 
 const INITIAL_FOCUS: FocusItem[] = [
     {
@@ -74,16 +82,11 @@ export default function WorkspacePage() {
 
   const [focusItems, setFocusItems] = useState<FocusItem[]>(INITIAL_FOCUS);
 
-  // Mock 数据
-  const projects = [
-    { id: 1, name: "智能排班系统", phase: "开发联调", docs: 42, health: "good", lastUpdate: "2小时前", pendingSummary: "2 待办 · 1 审批中" },
-    { id: 2, name: "企业知识库 RAG", phase: "需求设计", docs: 15, health: "warning", lastUpdate: "1天前", pendingSummary: "1 风险待确认" },
-    { id: 3, name: "自动化运维平台", phase: "灰度发布", docs: 89, health: "critical", lastUpdate: "30分钟前", pendingSummary: "3 待办 · 解析中 1 篇" },
-  ];
+  const { items: projectItems, loading: projectsLoading } = useProjectList();
 
   const projectOptions = useMemo(
-    () => projects.map((p) => ({ id: p.id, name: p.name })),
-    [projects]
+    () => projectItems.map((p) => ({ id: p.id, name: p.name })),
+    [projectItems]
   );
 
   const risks = [
@@ -131,7 +134,10 @@ export default function WorkspacePage() {
               }
             >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {projects.map(project => (
+              {projectsLoading && projectItems.length === 0 ? (
+                <p className="col-span-full text-sm text-muted-foreground">加载项目列表…</p>
+              ) : null}
+              {projectItems.map((project) => (
                 <Card key={project.id} className="paper-border hover:shadow-md transition-shadow cursor-pointer group">
                   <CardHeader className="pb-2">
                     <div className="flex justify-between items-start">
@@ -142,10 +148,10 @@ export default function WorkspacePage() {
                     </div>
                     <CardDescription className="flex items-center gap-2 mt-1">
                       <Clock size={12} />
-                      最后更新: {project.lastUpdate}
+                      最后更新: {formatShort(project.last_update_at)}
                     </CardDescription>
                     <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      {project.pendingSummary}
+                      {project.pending_summary}
                     </p>
                   </CardHeader>
                   <CardContent>
@@ -158,7 +164,7 @@ export default function WorkspacePage() {
                         <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">文档总数</p>
                         <div className="flex items-center justify-end gap-1 font-serif italic">
                           <FileText size={14} />
-                          {project.docs}
+                          {project.document_count}
                         </div>
                       </div>
                     </div>

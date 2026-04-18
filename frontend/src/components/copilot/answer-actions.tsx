@@ -8,7 +8,7 @@ import { TaskAssignDialog } from "@/components/shared/task-assign-dialog";
 import type { FocusItem } from "@/components/shared/today-focus";
 import { projectPath } from "@/lib/project-links";
 
-type ProjectOption = { id: number; name: string };
+type ProjectOption = { id: string; name: string };
 
 export function AnswerActions({
   projectId,
