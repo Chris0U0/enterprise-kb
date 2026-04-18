@@ -2,8 +2,9 @@
 
 import React from 'react';
 import { Sidebar } from "./sidebar";
+import { NotificationBell } from "./notification-bell";
 import { useAuth } from "@/lib/auth-context";
-import { usePathname } from 'next/navigation';
+import { usePathname } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
@@ -36,6 +37,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       <Sidebar />
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F9F7F2]">
+        <div className="flex h-11 shrink-0 items-center justify-end border-b border-border bg-[#F9F7F2]/95 px-3 backdrop-blur-sm sm:px-4">
+          <NotificationBell />
+        </div>
         <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           {children}
         </div>

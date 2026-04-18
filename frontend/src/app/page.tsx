@@ -1,9 +1,12 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AppPage, PageHeader, PageSection } from "@/components/shared/page-layout";
+import { TodayFocus, type FocusItem } from "@/components/shared/today-focus";
+import { TaskAssignDialog } from "@/components/shared/task-assign-dialog";
+import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,13 +22,69 @@ import {
   Plus
 } from "lucide-react";
 
+const INITIAL_FOCUS: FocusItem[] = [
+    {
+      id: "f1",
+      type: "approval",
+      source: "ai",
+      title: "「核心代码逻辑V3_说明.pdf」等待您审批入库",
+      projectName: "智能排班系统",
+      projectHref: "/projects/1",
+      actionHref: "/admin/approval",
+      actionLabel: "去审批",
+    },
+    {
+      id: "f2",
+      type: "risk",
+      source: "ai",
+      title: "单元测试覆盖率低于阈值，需排期整改",
+      projectName: "自动化运维平台",
+      projectHref: "/projects/3",
+      actionHref: "/projects/3",
+      actionLabel: "查看项目",
+    },
+    {
+      id: "f-mgr-demo",
+      type: "task",
+      source: "manager",
+      title: "周五评审会前请同步接口 Mock 数据方案",
+      projectName: "智能排班系统",
+      projectHref: "/projects/1",
+      actionHref: "/projects/1",
+      actionLabel: "去处理",
+      assignee: "李四",
+      dueHint: "截止：2026-04-18",
+    },
+    {
+      id: "f3",
+      type: "deadline",
+      source: "system",
+      title: "里程碑「首轮灰度测试」将在 14 天后到期",
+      projectName: "智能排班系统",
+      projectHref: "/projects/1",
+      actionHref: "/projects/1",
+      actionLabel: "打开里程碑",
+    },
+  ];
+
 export default function WorkspacePage() {
+  const { user } = useAuth();
+  const canAssign =
+    user?.role === "Admin" || user?.role === "Editor";
+
+  const [focusItems, setFocusItems] = useState<FocusItem[]>(INITIAL_FOCUS);
+
   // Mock 数据
   const projects = [
-    { id: 1, name: "智能排班系统", phase: "开发联调", docs: 42, health: "good", lastUpdate: "2小时前" },
-    { id: 2, name: "企业知识库 RAG", phase: "需求设计", docs: 15, health: "warning", lastUpdate: "1天前" },
-    { id: 3, name: "自动化运维平台", phase: "灰度发布", docs: 89, health: "critical", lastUpdate: "30分钟前" },
+    { id: 1, name: "智能排班系统", phase: "开发联调", docs: 42, health: "good", lastUpdate: "2小时前", pendingSummary: "2 待办 · 1 审批中" },
+    { id: 2, name: "企业知识库 RAG", phase: "需求设计", docs: 15, health: "warning", lastUpdate: "1天前", pendingSummary: "1 风险待确认" },
+    { id: 3, name: "自动化运维平台", phase: "灰度发布", docs: 89, health: "critical", lastUpdate: "30分钟前", pendingSummary: "3 待办 · 解析中 1 篇" },
   ];
+
+  const projectOptions = useMemo(
+    () => projects.map((p) => ({ id: p.id, name: p.name })),
+    [projects]
+  );
 
   const risks = [
     { id: 1, project: "自动化运维平台", type: "质量风险", desc: "单元测试覆盖率低于 60%", level: "high" },
@@ -42,6 +101,20 @@ export default function WorkspacePage() {
             <Plus size={18} />
             新建项目
           </Button>
+        }
+      />
+
+      <TodayFocus
+        items={focusItems}
+        headerExtra={
+          canAssign ? (
+            <TaskAssignDialog
+              projects={projectOptions}
+              onAssign={(item) =>
+                setFocusItems((prev) => [item, ...prev])
+              }
+            />
+          ) : null
         }
       />
 
@@ -71,6 +144,9 @@ export default function WorkspacePage() {
                       <Clock size={12} />
                       最后更新: {project.lastUpdate}
                     </CardDescription>
+                    <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {project.pendingSummary}
+                    </p>
                   </CardHeader>
                   <CardContent>
                     <div className="flex justify-between items-center mt-4">

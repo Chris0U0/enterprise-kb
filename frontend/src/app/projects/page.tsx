@@ -27,10 +27,10 @@ export default function ProjectsListPage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const projects = [
-    { id: 1, name: "智能排班系统", description: "基于遗传算法的自动排班引擎，支持多维度约束。", phase: "开发联调", members: 8, docs: 42, health: "good", lastUpdate: "2小时前" },
-    { id: 2, name: "企业知识库 RAG", description: "面向企业文档的检索增强生成系统，支持私有化部署。", phase: "需求设计", members: 5, docs: 15, health: "warning", lastUpdate: "1天前" },
-    { id: 3, name: "自动化运维平台", description: "集成监控、告警、自动修复的一站式运维管控中心。", phase: "灰度发布", members: 12, docs: 89, health: "critical", lastUpdate: "30分钟前" },
-    { id: 4, name: "客户画像分析", description: "基于大数据平台的 360 度客户画像构建与精准营销。", phase: "初期准备", members: 3, docs: 4, health: "good", lastUpdate: "3天前" },
+    { id: 1, name: "智能排班系统", description: "基于遗传算法的自动排班引擎，支持多维度约束。", phase: "开发联调", members: 8, docs: 42, health: "good", lastUpdate: "2小时前", pendingSummary: "2 待办 · 1 审批中" },
+    { id: 2, name: "企业知识库 RAG", description: "面向企业文档的检索增强生成系统，支持私有化部署。", phase: "需求设计", members: 5, docs: 15, health: "warning", lastUpdate: "1天前", pendingSummary: "1 风险待确认" },
+    { id: 3, name: "自动化运维平台", description: "集成监控、告警、自动修复的一站式运维管控中心。", phase: "灰度发布", members: 12, docs: 89, health: "critical", lastUpdate: "30分钟前", pendingSummary: "3 待办 · 解析中 1 篇" },
+    { id: 4, name: "客户画像分析", description: "基于大数据平台的 360 度客户画像构建与精准营销。", phase: "初期准备", members: 3, docs: 4, health: "good", lastUpdate: "3天前", pendingSummary: "暂无阻塞" },
   ];
 
   const filteredProjects = projects.filter(p => 
@@ -123,6 +123,7 @@ export default function ProjectsListPage() {
                         <Link href={`/projects/${project.id}`} className="group-hover:text-primary transition-colors">
                           <p className="font-serif italic font-bold text-base leading-tight">{project.name}</p>
                           <p className="text-[10px] text-muted-foreground line-clamp-1 mt-1 font-normal italic">{project.description}</p>
+                          <p className="mt-1 text-[10px] font-medium text-muted-foreground/90">{project.pendingSummary}</p>
                         </Link>
                       </td>
                       <td className="px-6 py-5">
@@ -173,6 +174,9 @@ function ProjectCard({ project }: { project: any }) {
         <CardDescription className="text-sm font-sans italic line-clamp-2 mt-2 leading-relaxed">
           {project.description}
         </CardDescription>
+        <p className="mt-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          {project.pendingSummary}
+        </p>
       </CardHeader>
       <CardContent className="flex-1 mt-4">
         <div className="flex items-center justify-between py-3 border-y border-border/50">

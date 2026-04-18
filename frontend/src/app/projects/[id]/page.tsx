@@ -5,6 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useParams, usePathname } from "next/navigation";
 import { AppPage, PageHeader } from "@/components/shared/page-layout";
+import { ReadOnlyBanner } from "@/components/shared/page-gate";
 import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -67,8 +68,16 @@ export default function ProjectDashboardPage() {
     segmentLabels: { [`/projects/${id}`]: project.name },
   });
 
+  const activeMilestone = project.timeline.find((t) => t.status === "in_progress");
+  const nextPending = project.timeline.find((t) => t.status === "pending");
+  const milestoneHeadline = activeMilestone ?? nextPending;
+
   return (
     <AppPage surface="canvas">
+      {user?.role === "Viewer" ? (
+        <ReadOnlyBanner className="mb-6" />
+      ) : null}
+
       <PageHeader
         title={
           <span className="flex flex-wrap items-center gap-3">
@@ -87,13 +96,52 @@ export default function ProjectDashboardPage() {
                 项目设置
               </Button>
             )}
-            <Button className="gap-2 bg-primary">
+            <Button
+              className="gap-2 bg-primary"
+              disabled={!canManage}
+              title={
+                !canManage
+                  ? "只读角色无法生成报表，如需权限请联系项目管理员"
+                  : undefined
+              }
+            >
               <Sparkles size={16} />
               生成本周报表
             </Button>
           </div>
         }
       />
+
+        {milestoneHeadline ? (
+          <Card className="paper-border border-primary/25 bg-gradient-to-r from-primary/5 to-transparent">
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  本周推进 · 里程碑
+                </p>
+                <p className="font-serif text-lg italic leading-snug">
+                  {milestoneHeadline.event}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {activeMilestone
+                    ? "当前阶段进行中，请关注联调与测试节点"
+                    : `下一节点计划 ${milestoneHeadline.date} 启动`}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Badge
+                  variant={activeMilestone ? "default" : "secondary"}
+                  className="font-sans text-xs"
+                >
+                  {activeMilestone ? "进行中" : "待开始"}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {activeMilestone ? "剩余约 12 个工作日（示例）" : ""}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card className="paper-border border-primary/15 bg-primary/5">
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
