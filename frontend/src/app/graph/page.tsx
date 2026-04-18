@@ -2,6 +2,10 @@
 
 import { cn } from "@/lib/utils";
 import React, { useState, useCallback } from 'react';
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useProject } from "@/hooks/use-project";
+import { getProjectRecord } from "@/data/project-registry";
 import ReactFlow, {
   Background,
   Controls,
@@ -80,6 +84,11 @@ const initialEdges: Edge[] = [
 ];
 
 export default function GraphExplorerPage() {
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get("projectId") ?? "1";
+  const { project: projectCtx } = useProject(projectId);
+  const graphProject = projectCtx ?? getProjectRecord(projectId);
+
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [query, setQuery] = useState("");
@@ -108,7 +117,11 @@ export default function GraphExplorerPage() {
           <Network size={20} className="text-primary" />
           <h1 className="text-xl font-bold italic tracking-tight font-serif">GraphRAG 图谱探索</h1>
           <div className="h-4 w-px bg-border mx-2" />
-          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-serif italic">智能排班系统</Badge>
+          <Link href={`/projects/${projectId}`} className="inline-flex">
+            <Badge variant="outline" className="border-primary/20 bg-primary/5 font-serif italic text-primary">
+              {graphProject.name}
+            </Badge>
+          </Link>
         </div>
         
         {/* 图谱 NLU 查询框 */}

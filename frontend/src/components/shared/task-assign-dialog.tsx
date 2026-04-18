@@ -1,7 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { X, Send } from "lucide-react";
@@ -13,15 +13,35 @@ type ProjectOption = { id: number; name: string };
 export function TaskAssignDialog({
   projects,
   onAssign,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  hideTrigger,
+  initialTitle,
+  defaultProjectId,
 }: {
   projects: ProjectOption[];
   onAssign: (item: FocusItem) => void;
+  /** 受控模式（如从问答「转为任务」打开） */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+  initialTitle?: string;
+  defaultProjectId?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
+
   const [title, setTitle] = useState("");
   const [assignee, setAssignee] = useState("");
   const [projectId, setProjectId] = useState(String(projects[0]?.id ?? 1));
   const [dueHint, setDueHint] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialTitle) setTitle(initialTitle);
+    if (defaultProjectId) setProjectId(defaultProjectId);
+  }, [open, initialTitle, defaultProjectId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,12 +72,14 @@ export function TaskAssignDialog({
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Trigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 font-sans" type="button">
-          <Send size={14} />
-          下派任务
-        </Button>
-      </Dialog.Trigger>
+      {!hideTrigger ? (
+        <Dialog.Trigger asChild>
+          <Button variant="outline" size="sm" className="gap-2 font-sans" type="button">
+            <Send size={14} />
+            下派任务
+          </Button>
+        </Dialog.Trigger>
+      ) : null}
       <Dialog.Portal>
         <Dialog.Overlay
           className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/40"

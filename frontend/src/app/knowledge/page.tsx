@@ -2,7 +2,10 @@
 
 import { cn } from "@/lib/utils";
 import React, { useState, useEffect } from 'react';
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { AppPage, PageHeader, PageToolbar } from "@/components/shared/page-layout";
+import { useProject } from "@/hooks/use-project";
 import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +29,10 @@ import {
 } from "lucide-react";
 
 export default function KnowledgeBasePage() {
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get("projectId");
+  const { project: projectCtx } = useProject(projectId ?? undefined);
+
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeDoc, setActiveDoc] = useState<number | null>(null);
 
@@ -81,6 +88,21 @@ export default function KnowledgeBasePage() {
           </div>
         }
       />
+
+      {projectId && projectCtx ? (
+        <div className="mb-6 flex flex-wrap items-center gap-2 rounded-sm border border-primary/20 bg-primary/5 px-4 py-2 text-sm">
+          <span className="text-muted-foreground">当前项目上下文</span>
+          <Badge variant="secondary" className="font-sans">
+            {projectCtx.name}
+          </Badge>
+          <Link
+            href={`/projects/${projectId}`}
+            className="text-xs text-primary underline-offset-2 hover:underline"
+          >
+            返回项目概览
+          </Link>
+        </div>
+      ) : null}
 
         <div className="flex flex-col gap-8 xl:flex-row xl:items-start">
           

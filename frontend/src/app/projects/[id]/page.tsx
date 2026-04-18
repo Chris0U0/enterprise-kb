@@ -34,20 +34,26 @@ import {
   PackageOpen,
   UsersRound
 } from "lucide-react";
+import { useProject } from "@/hooks/use-project";
+import { getProjectRecord } from "@/data/project-registry";
+import { ProjectOnboarding } from "@/components/project/project-onboarding";
+import { ProactiveSummaryCard } from "@/components/project/proactive-summary-card";
 
 export default function ProjectDashboardPage() {
   const params = useParams();
   const pathname = usePathname();
   const id = params.id as string;
   const { user } = useAuth();
+  const { project: meta } = useProject(id);
+  const record = meta ?? getProjectRecord(id);
 
   // 权限检查辅助函数
   const canManage = user?.role === 'Admin' || user?.role === 'Editor';
 
-  // Mock 项目数据
+  // Mock 项目数据（名称/阶段/引导与 project-registry 对齐）
   const project = {
     id,
-    name: id === '1' ? "智能排班系统" : "企业知识库 RAG",
+    name: record.name,
     health: { progress: 85, risk: 12, quality: 92 },
     members: [
       { id: 1, name: "张三", role: "Admin", email: "zhangsan@example.com" },
@@ -171,6 +177,8 @@ export default function ProjectDashboardPage() {
           </CardContent>
         </Card>
 
+        <ProjectOnboarding projectId={id} flags={record.onboarding} className="mb-6" />
+
         {/* 核心仪表盘网格 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
@@ -223,30 +231,16 @@ export default function ProjectDashboardPage() {
             </Card>
           </div>
 
-          {/* 2. AI 项目简报 (ReportGenerationSkill) */}
+          {/* 2. AI 项目简报：可刷新摘要 */}
           <div className="lg:col-span-2 space-y-6">
-            <Card className="paper-border bg-primary/5 border-primary/20 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4">
-                <Sparkles size={24} className="text-primary/20" />
-              </div>
-              <CardHeader>
-                <CardTitle className="text-lg font-serif italic flex items-center gap-2">
-                  <FileText size={18} className="text-primary" />
-                  AI 项目简报 (本周总结)
-                </CardTitle>
-                <CardDescription>由 ReportGenerationSkill 自动分析生成</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-white/80 p-6 border border-primary/10 rounded-sm font-sans leading-[1.8] text-sm shadow-sm min-h-[160px]">
-                  {project.lastReport}
-                </div>
-                <div className="mt-4 flex justify-end">
-                  <Button variant="ghost" size="sm" className="gap-1 text-xs">
-                    查看历史报告 <ArrowRight size={14} />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <ProactiveSummaryCard body={project.lastReport} />
+            <div className="flex justify-end">
+              <Button variant="ghost" size="sm" className="gap-1 text-xs" asChild>
+                <Link href="/report">
+                  查看历史报告 <ArrowRight size={14} />
+                </Link>
+              </Button>
+            </div>
 
             {/* 潜在风险预警 */}
             <Card className="paper-border border-yellow-200 bg-yellow-50/50">

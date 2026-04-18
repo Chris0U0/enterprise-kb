@@ -1,11 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
   Bot,
   CheckSquare,
+  ChevronDown,
   FileWarning,
   Inbox,
   ListTodo,
@@ -73,78 +75,116 @@ export function TodayFocus({
   items,
   className,
   headerExtra,
+  defaultOpen = true,
 }: {
   items: FocusItem[];
   className?: string;
   /** 例如「下派任务」按钮，仅管理者可见 */
   headerExtra?: ReactNode;
+  /** 默认展开；折叠后标题旁显示摘要条数 */
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+
   return (
     <Card className={cn("paper-border border-primary/20 bg-primary/5", className)}>
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <CardTitle className="font-serif text-lg italic">今日聚焦</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              AI 自动汇总与管理者下派任务统一展示，点击可进入项目或处理页
-            </p>
+          <div className="flex min-w-0 flex-1 gap-2">
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              className={cn(
+                "group flex min-w-0 flex-1 items-start gap-2 rounded-sm text-left outline-none",
+                "ring-offset-background transition-colors hover:bg-background/60 focus-visible:ring-2 focus-visible:ring-ring"
+              )}
+            >
+              <ChevronDown
+                className={cn(
+                  "mt-1.5 h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
+                  open ? "rotate-0" : "-rotate-90"
+                )}
+                aria-hidden
+              />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle className="font-serif text-lg italic">今日聚焦</CardTitle>
+                  {!open &&
+                    (items.length > 0 ? (
+                      <Badge variant="secondary" className="font-sans text-xs">
+                        {items.length} 项待处理
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="font-sans text-xs text-muted-foreground">
+                        暂无
+                      </Badge>
+                    ))}
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  AI 自动汇总与管理者下派任务统一展示，点击可进入项目或处理页
+                </p>
+              </div>
+            </button>
           </div>
           {headerExtra ? (
             <div className="flex shrink-0 flex-wrap gap-2">{headerExtra}</div>
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="space-y-2">
-        {items.length === 0 ? (
-          <EmptyState
-            icon={Inbox}
-            title="暂无待办"
-            description="管理者可下派任务；也可从项目与知识库产生 AI 摘要事项。"
-            actionLabel="前往项目管理"
-            actionHref="/projects"
-          />
-        ) : (
-          items.map((item) => {
-            const Icon = typeIcon[item.type];
-            return (
-              <div
-                key={item.id}
-                className="flex flex-col gap-3 rounded-sm border border-border/80 bg-background/80 p-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="flex min-w-0 gap-3">
-                  <div className="mt-0.5 shrink-0 text-primary">
-                    <Icon className="h-5 w-5" aria-hidden />
-                  </div>
-                  <div className="min-w-0 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <SourceBadge source={item.source} />
+      {open ? (
+        <CardContent className="space-y-2">
+          {items.length === 0 ? (
+            <EmptyState
+              icon={Inbox}
+              title="暂无待办"
+              description="管理者可下派任务；也可从项目与知识库产生 AI 摘要事项。"
+              actionLabel="前往项目管理"
+              actionHref="/projects"
+            />
+          ) : (
+            items.map((item) => {
+              const Icon = typeIcon[item.type];
+              return (
+                <div
+                  key={item.id}
+                  className="flex flex-col gap-3 rounded-sm border border-border/80 bg-background/80 p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex min-w-0 gap-3">
+                    <div className="mt-0.5 shrink-0 text-primary">
+                      <Icon className="h-5 w-5" aria-hidden />
                     </div>
-                    <p className="text-sm font-medium leading-snug">{item.title}</p>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <span>
-                        项目{" "}
-                        <Link
-                          href={item.projectHref}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          {item.projectName}
-                        </Link>
-                      </span>
-                      {item.assignee ? (
-                        <span>负责人：{item.assignee}</span>
-                      ) : null}
-                      {item.dueHint ? <span>{item.dueHint}</span> : null}
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <SourceBadge source={item.source} />
+                      </div>
+                      <p className="text-sm font-medium leading-snug">{item.title}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>
+                          项目{" "}
+                          <Link
+                            href={item.projectHref}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            {item.projectName}
+                          </Link>
+                        </span>
+                        {item.assignee ? (
+                          <span>负责人：{item.assignee}</span>
+                        ) : null}
+                        {item.dueHint ? <span>{item.dueHint}</span> : null}
+                      </div>
                     </div>
                   </div>
+                  <Button size="sm" className="shrink-0 self-start sm:self-center" asChild>
+                    <Link href={item.actionHref}>{item.actionLabel}</Link>
+                  </Button>
                 </div>
-                <Button size="sm" className="shrink-0 self-start sm:self-center" asChild>
-                  <Link href={item.actionHref}>{item.actionLabel}</Link>
-                </Button>
-              </div>
-            );
-          })
-        )}
-      </CardContent>
+              );
+            })
+          )}
+        </CardContent>
+      ) : null}
     </Card>
   );
 }
