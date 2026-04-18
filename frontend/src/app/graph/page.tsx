@@ -2,36 +2,33 @@
 
 import { cn } from "@/lib/utils";
 import React, { useState, useCallback } from 'react';
-import ReactFlow, { 
-  Background, 
-  Controls, 
-  MiniMap, 
+import ReactFlow, {
+  Background,
+  Controls,
+  MiniMap,
   Panel,
   MarkerType,
   useNodesState,
   useEdgesState,
   addEdge,
-  Node,
-  Edge
+  type Node,
+  type Edge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { AppPage, Breadcrumbs } from "@/components/shared/page-layout";
+import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  Network, 
-  Search, 
-  Terminal, 
-  Database, 
-  Users, 
-  ShieldAlert, 
+import {
+  Network,
+  Terminal,
   Info,
   ChevronRight,
   Sparkles,
   Command,
-  LayoutGrid
+  LayoutGrid,
 } from "lucide-react";
 
 // 自定义节点样式建议在 globals.css 中，这里先使用 inline style
@@ -87,12 +84,26 @@ export default function GraphExplorerPage() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [query, setQuery] = useState("");
 
-  const onConnect = useCallback((params: any) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
+  const onConnect = useCallback(
+    (params: Parameters<typeof addEdge>[0]) =>
+      setEdges((eds) => addEdge(params, eds)),
+    [setEdges]
+  );
+
+  /** React Flow 要求父级有明确宽高；在可滚动主布局中勿仅依赖 flex-1 */
+  const miniMapNodeColor = useCallback(
+    (n: Node) => (n.style?.background as string) || "#eee",
+    []
+  );
 
   return (
-    <div className="h-screen bg-background flex flex-col font-sans">
+    <AppPage fullWidth noPadding className="min-h-0 p-0" innerClassName="space-y-0">
+    <div className="flex flex-col bg-background font-sans">
+      <div className="border-b border-border bg-white/50 px-4 py-2 backdrop-blur-sm sm:px-6 lg:px-8">
+        <Breadcrumbs items={breadcrumbsFromPathname("/graph")} />
+      </div>
       {/* 顶部工具栏 */}
-      <div className="h-16 border-b border-border flex items-center justify-between px-8 bg-white/50 backdrop-blur-sm z-10">
+      <div className="flex h-16 shrink-0 flex-wrap items-center justify-between gap-4 border-b border-border bg-white/50 px-4 backdrop-blur-sm sm:px-6 lg:px-8 z-10">
         <div className="flex items-center gap-4">
           <Network size={20} className="text-primary" />
           <h1 className="text-xl font-bold italic tracking-tight font-serif">GraphRAG 图谱探索</h1>
@@ -101,7 +112,7 @@ export default function GraphExplorerPage() {
         </div>
         
         {/* 图谱 NLU 查询框 */}
-        <div className="flex-1 max-w-2xl mx-12 relative group">
+        <div className="relative order-3 flex-1 basis-full group sm:order-none sm:basis-auto lg:mx-8 lg:max-w-2xl">
           <div className="absolute left-3 top-1/2 -translate-y-1/2 text-primary">
             <Command size={16} />
           </div>
@@ -125,8 +136,10 @@ export default function GraphExplorerPage() {
         </div>
       </div>
 
-      <div className="flex-1 relative">
-        {/* ReactFlow 画布 */}
+      <div
+        className="relative w-full min-h-[420px] h-[calc(100dvh-11rem)] max-h-[900px]"
+        aria-label="知识图谱画布"
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -134,13 +147,14 @@ export default function GraphExplorerPage() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           fitView
-          className="bg-[#F9F7F2]"
+          className="h-full w-full bg-[#F9F7F2]"
+          proOptions={{ hideAttribution: true }}
         >
           <Background color="#E5E1D8" gap={20} size={1} />
           <Controls className="bg-white border-border shadow-md" />
-          <MiniMap 
-            className="border border-border bg-white shadow-md" 
-            nodeColor={(n) => (n.style?.background as string) || '#eee'} 
+          <MiniMap
+            className="border border-border bg-white shadow-md"
+            nodeColor={miniMapNodeColor}
           />
           
           <Panel position="top-right" className="flex flex-col gap-4 max-w-[320px]">
@@ -196,16 +210,17 @@ export default function GraphExplorerPage() {
       </div>
 
       {/* 底部属性查看器提示 (模拟) */}
-      <div className="h-10 border-t border-border bg-white flex items-center px-8 justify-between text-[10px] text-muted-foreground uppercase tracking-widest font-sans">
+      <div className="flex h-auto min-h-10 shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-white px-4 py-2 text-[10px] font-sans uppercase tracking-widest text-muted-foreground sm:px-8">
         <div className="flex gap-6">
            <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-sm bg-primary" /> 项目/根节点</span>
            <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-sm bg-white border border-border" /> 实体 (Person/Object)</span>
            <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-sm bg-destructive" /> 风险节点</span>
         </div>
-        <div>
+        <div className="text-left sm:text-right">
           Graph Metadata: 124 Entities · 312 Relations · 14.2 MB Index
         </div>
       </div>
     </div>
+    </AppPage>
   );
 }

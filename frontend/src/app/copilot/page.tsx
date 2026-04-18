@@ -2,6 +2,8 @@
 
 import { cn } from "@/lib/utils";
 import React from 'react';
+import { AppPage, PageHeader } from "@/components/shared/page-layout";
+import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Badge } from "@/components/ui/badge";
@@ -17,38 +19,45 @@ export default function CopilotPage() {
   ];
 
   return (
-    <div className="h-screen bg-background text-foreground flex flex-col">
-      {/* 顶部导航模拟 */}
-      <header className="h-14 border-b border-border flex items-center px-6 justify-between bg-white/50 backdrop-blur-sm z-10">
-        <div className="flex items-center gap-4">
-          <h1 className="text-lg font-bold italic tracking-tight">Enterprise KB</h1>
-          <nav className="flex gap-4 text-sm font-sans text-muted-foreground">
-            <span className="hover:text-foreground cursor-pointer">工作台</span>
-            <span className="text-foreground font-medium underline decoration-2 underline-offset-4">研读室</span>
-            <span className="hover:text-foreground cursor-pointer">知识库</span>
-          </nav>
-        </div>
-        <div className="flex items-center gap-3">
-          <Badge variant="secondary" className="font-sans">项目: 智能排班系统</Badge>
-          <div className="w-8 h-8 rounded-full bg-accent border border-border flex items-center justify-center text-xs">JD</div>
-        </div>
-      </header>
+    <AppPage
+      surface="canvas"
+      fullWidth
+      noPadding
+      className="text-foreground"
+      innerClassName="flex min-h-0 flex-col space-y-0"
+    >
+      <PageHeader
+        className="border-b border-border bg-white/50 px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8"
+        title="AI Copilot 研读室"
+        description="基于选定文档进行深度研读与问答"
+        breadcrumbs={breadcrumbsFromPathname("/copilot")}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="font-sans">
+              项目: 智能排班系统
+            </Badge>
+            <Badge variant="outline" className="border-border bg-white/50 font-sans">
+              需求文档V2
+            </Badge>
+            <Badge variant="outline" className="border-border bg-white/50 font-sans">
+              架构设计
+            </Badge>
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-accent text-xs"
+              aria-hidden
+            >
+              JD
+            </div>
+          </div>
+        }
+      />
 
-      <ResizablePanelGroup direction="horizontal" className="flex-1">
+      <div className="flex min-h-[min(100dvh,920px)] flex-1 flex-col lg:min-h-[calc(100dvh-12rem)]">
+      <ResizablePanelGroup direction="horizontal" className="min-h-[560px] flex-1">
         
         {/* 左侧：会话与思考区 */}
         <ResizablePanel defaultSize={45} minSize={30}>
-          <div className="flex flex-col h-full p-6 bg-background">
-            <div className="mb-6 flex items-center justify-between">
-              <div className="space-y-1">
-                <h2 className="text-2xl font-bold tracking-tight italic">AI Copilot 研读室</h2>
-                <p className="text-sm text-muted-foreground font-sans">基于选定文档进行深度研读与问答</p>
-              </div>
-              <div className="flex gap-2">
-                <Badge variant="outline" className="bg-white/50 border-border font-sans">需求文档V2</Badge>
-                <Badge variant="outline" className="bg-white/50 border-border font-sans">架构设计</Badge>
-              </div>
-            </div>
+          <div className="flex h-full flex-col bg-background p-4 sm:p-6">
 
             {/* 思考轨迹 (Traces) */}
             <div className="mb-6 bg-muted/50 border border-border p-4 rounded-sm font-sans shadow-sm">
@@ -102,12 +111,13 @@ export default function CopilotPage() {
             </ScrollArea>
 
             {/* 输入框 */}
-            <div className="mt-6 relative">
+            <div className="relative mt-6">
               <Input 
                 placeholder="询问关于项目的问题..." 
-                className="bg-white border-input focus-visible:ring-ring pr-14 h-14 text-base font-sans shadow-sm"
+                className="h-14 border-input bg-white pr-14 text-base font-sans shadow-sm focus-visible:ring-ring"
+                aria-label="向 Copilot 提问"
               />
-              <Button size="icon" className="absolute right-2 top-2 h-10 w-10 bg-primary hover:bg-primary/90 transition-transform active:scale-95">
+              <Button size="icon" className="absolute right-2 top-2 h-10 w-10 bg-primary hover:bg-primary/90 transition-transform active:scale-95" aria-label="发送">
                 <Send size={20} />
               </Button>
             </div>
@@ -126,8 +136,8 @@ export default function CopilotPage() {
                 <Badge className="bg-green-100 text-green-800 border-green-200 text-[10px] font-sans">MD5 已校验: 8f9e...2a1b</Badge>
               </div>
               <div className="flex gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8"><Search size={16} /></Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8"><BookOpen size={16} /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="在文档中搜索"><Search size={16} /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="目录"><BookOpen size={16} /></Button>
                 <div className="w-px h-4 bg-border mx-2 self-center" />
                 <Button variant="outline" size="sm" className="h-8 text-xs font-sans">导出原文</Button>
               </div>
@@ -197,6 +207,7 @@ export default function CopilotPage() {
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
-    </div>
+      </div>
+    </AppPage>
   );
 }

@@ -2,6 +2,8 @@
 
 import { cn } from "@/lib/utils";
 import React, { useState, useEffect } from 'react';
+import { AppPage, PageHeader, PageToolbar } from "@/components/shared/page-layout";
+import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,56 +59,67 @@ export default function KnowledgeBasePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* 顶部标题与操作栏 */}
-        <div className="flex justify-between items-end border-b border-border pb-6">
-          <div className="space-y-1">
-            <h1 className="text-4xl font-bold italic tracking-tight font-serif">知识库管理</h1>
-            <p className="text-muted-foreground">上传多模态文件，AI 正在为您自动解析结构并提取特征。</p>
-          </div>
-          <div className="flex gap-4">
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input placeholder="搜索文档内容..." className="pl-10 h-10 border-border bg-white" />
+    <AppPage surface="canvas">
+      <PageHeader
+        title="知识库管理"
+        description="上传多模态文件，AI 正在为您自动解析结构并提取特征。"
+        breadcrumbs={breadcrumbsFromPathname("/knowledge")}
+        actions={
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+            <div className="relative w-full min-w-0 sm:w-64">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="搜索文档内容..."
+                className="h-10 border-border bg-white pl-10"
+                aria-label="搜索文档"
+              />
             </div>
             <Button className="gap-2 bg-primary">
               <Upload size={18} />
               上传文件
             </Button>
           </div>
-        </div>
+        }
+      />
 
-        <div className="flex gap-8">
+        <div className="flex flex-col gap-8 xl:flex-row xl:items-start">
           
           {/* 左侧：文档列表 */}
-          <div className="flex-1 space-y-6">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <Button 
-                  variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
-                  size="icon" 
+          <div className="min-w-0 flex-1 space-y-6">
+            <PageToolbar
+              end={
+                <p className="font-serif text-xs italic text-muted-foreground">
+                  共 24 篇文档 · 占用 156.4 MB
+                </p>
+              }
+            >
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                <Button
+                  type="button"
+                  variant={viewMode === "grid" ? "secondary" : "ghost"}
+                  size="icon"
                   className="h-8 w-8"
-                  onClick={() => setViewMode('grid')}
+                  onClick={() => setViewMode("grid")}
+                  aria-label="网格视图"
                 >
                   <Grid size={16} />
                 </Button>
-                <Button 
-                  variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
-                  size="icon" 
+                <Button
+                  type="button"
+                  variant={viewMode === "list" ? "secondary" : "ghost"}
+                  size="icon"
                   className="h-8 w-8"
-                  onClick={() => setViewMode('list')}
+                  onClick={() => setViewMode("list")}
+                  aria-label="列表视图"
                 >
                   <List size={16} />
                 </Button>
-                <div className="h-4 w-px bg-border mx-2" />
-                <Button variant="ghost" size="sm" className="gap-1 text-xs">
+                <div className="mx-2 hidden h-4 w-px bg-border sm:block" />
+                <Button variant="ghost" size="sm" type="button" className="gap-1 text-xs">
                   <Filter size={14} /> 筛选
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground font-serif italic">共 24 篇文档 · 占用 156.4 MB</p>
-            </div>
+            </PageToolbar>
 
             {viewMode === 'grid' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -192,9 +205,9 @@ export default function KnowledgeBasePage() {
             )}
           </div>
 
-          {/* 右侧：文档结构预览树 (Drawer Simulation) */}
-          <div className="w-80 shrink-0">
-            <div className="sticky top-8 space-y-6">
+          {/* 右侧：文档结构预览树 (窄屏置于下方) */}
+          <div className="w-full shrink-0 xl:w-80">
+            <div className="space-y-6 xl:sticky xl:top-8">
               <Card className="paper-border border-primary/20 bg-primary/5 min-h-[500px]">
                 <CardHeader>
                   <CardTitle className="text-lg font-serif italic flex items-center gap-2">
@@ -246,8 +259,7 @@ export default function KnowledgeBasePage() {
           </div>
 
         </div>
-      </div>
-    </div>
+    </AppPage>
   );
 }
 

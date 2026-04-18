@@ -3,7 +3,9 @@
 import { cn } from "@/lib/utils";
 import React from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation";
+import { AppPage, PageHeader } from "@/components/shared/page-layout";
+import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +32,7 @@ import {
 
 export default function ProjectDashboardPage() {
   const params = useParams();
+  const pathname = usePathname();
   const id = params.id as string;
   const { user } = useAuth();
 
@@ -56,28 +59,24 @@ export default function ProjectDashboardPage() {
     lastReport: "本周系统核心架构已完成 MD5 校验模块，整体进度超前 5%。但单元测试覆盖率在 `services/auth` 目录下偏低，需引起关注。"
   };
 
+  const breadcrumbs = breadcrumbsFromPathname(pathname, {
+    segmentLabels: { [`/projects/${id}`]: project.name },
+  });
+
   return (
-    <div className="min-h-screen bg-background p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* 顶部导航与项目标题 */}
-        <div className="flex justify-between items-end border-b border-border pb-6">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2 italic">
-              <Link href="/" className="hover:text-primary transition-colors">工作台</Link>
-              <span>/</span>
-              <Link href="/projects" className="hover:text-primary transition-colors">项目管理</Link>
-              <span>/</span>
-              <span className="text-foreground font-medium">{project.name}</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <h1 className="text-4xl font-bold italic tracking-tight font-serif">{project.name}</h1>
-              <Badge variant="secondary" className="font-sans text-xs">
-                {user?.role === 'Viewer' ? '只读模式' : '管理模式'}
-              </Badge>
-            </div>
-          </div>
-          <div className="flex gap-3">
+    <AppPage surface="canvas">
+      <PageHeader
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {project.name}
+            <Badge variant="secondary" className="font-sans text-xs">
+              {user?.role === "Viewer" ? "只读模式" : "管理模式"}
+            </Badge>
+          </span>
+        }
+        breadcrumbs={breadcrumbs}
+        actions={
+          <div className="flex flex-wrap gap-2">
             {canManage && (
               <Button variant="outline" className="gap-2">
                 <Settings size={16} />
@@ -89,7 +88,8 @@ export default function ProjectDashboardPage() {
               生成本周报表
             </Button>
           </div>
-        </div>
+        }
+      />
 
         {/* 核心仪表盘网格 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -285,8 +285,7 @@ export default function ProjectDashboardPage() {
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
-    </div>
+    </AppPage>
   );
 }
 

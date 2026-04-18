@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import React from 'react';
 import Link from 'next/link';
+import { AppPage, PageHeader, PageSection } from "@/components/shared/page-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,30 +33,30 @@ export default function WorkspacePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-10">
-        
-        {/* 头部 */}
-        <div className="flex justify-between items-end border-b border-border pb-6">
-          <div className="space-y-2">
-            <h1 className="text-4xl font-bold italic tracking-tight font-serif">全局工作台</h1>
-            <p className="text-muted-foreground">欢迎回来，这是您参与的所有项目聚合看板。</p>
-          </div>
+    <AppPage surface="canvas">
+      <PageHeader
+        title="全局工作台"
+        description="欢迎回来，这是您参与的所有项目聚合看板。"
+        actions={
           <Button className="font-sans gap-2">
             <Plus size={18} />
             新建项目
           </Button>
-        </div>
+        }
+      />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* 左侧：项目聚合看板 */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="flex items-center gap-2 text-lg font-bold italic font-serif">
-              <FolderKanban size={20} className="text-primary" />
-              项目聚合看板
-            </div>
-            
+          <div className="lg:col-span-2">
+            <PageSection
+              title={
+                <span className="flex items-center gap-2 text-lg">
+                  <FolderKanban size={20} className="text-primary" />
+                  项目聚合看板
+                </span>
+              }
+            >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {projects.map(project => (
                 <Card key={project.id} className="paper-border hover:shadow-md transition-shadow cursor-pointer group">
@@ -96,15 +97,20 @@ export default function WorkspacePage() {
                 </Card>
               ))}
             </div>
+            </PageSection>
           </div>
 
           {/* 右侧：全局待办与预警 */}
-          <div className="space-y-6">
-            <div className="flex items-center gap-2 text-lg font-bold italic font-serif">
-              <AlertTriangle size={20} className="text-destructive" />
-              全局待办与预警
-            </div>
-
+          <div>
+            <PageSection
+              title={
+                <span className="flex items-center gap-2 text-lg">
+                  <AlertTriangle size={20} className="text-destructive" />
+                  全局待办与预警
+                </span>
+              }
+            >
+            <div className="space-y-6">
             <Card className="paper-border bg-destructive/5">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-bold uppercase tracking-widest text-destructive flex items-center gap-2">
@@ -146,11 +152,12 @@ export default function WorkspacePage() {
                 </div>
               </CardContent>
             </Card>
+            </div>
+            </PageSection>
           </div>
 
         </div>
-      </div>
-    </div>
+    </AppPage>
   );
 }
 

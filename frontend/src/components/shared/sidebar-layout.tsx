@@ -35,8 +35,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       <Sidebar />
-      <main className="flex-1 overflow-auto relative bg-[#F9F7F2]">
-        {children}
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F9F7F2]">
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+          {children}
+        </div>
       </main>
     </div>
   );

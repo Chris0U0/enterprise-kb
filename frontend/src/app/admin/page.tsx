@@ -3,6 +3,8 @@
 import { cn } from "@/lib/utils";
 import React from 'react';
 import Link from 'next/link';
+import { AppPage, PageHeader } from "@/components/shared/page-layout";
+import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,21 +45,20 @@ export default function AdminConsolePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* 头部 */}
-        <div className="flex justify-between items-end border-b border-border pb-6">
-          <div className="space-y-1">
-            <h1 className="text-4xl font-bold italic tracking-tight font-serif">系统设置与审计</h1>
-            <p className="text-muted-foreground">管理员控制台：监控系统健康度、评估 AI 质量并追踪审计流水。</p>
-          </div>
-          <div className="flex gap-3">
-             <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-serif italic text-sm py-1">
-                Admin Privilege Enabled
-             </Badge>
-          </div>
-        </div>
+    <AppPage surface="canvas">
+      <PageHeader
+        title="系统设置与审计"
+        description="管理员控制台：监控系统健康度、评估 AI 质量并追踪审计流水。"
+        breadcrumbs={breadcrumbsFromPathname("/admin")}
+        actions={
+          <Badge
+            variant="outline"
+            className="border-primary/20 bg-primary/5 py-1 font-serif text-sm italic text-primary"
+          >
+            Admin Privilege Enabled
+          </Badge>
+        }
+      />
 
         <Tabs defaultValue="audit" className="w-full">
           <TabsList className="bg-transparent border-b border-border w-full justify-start rounded-none h-auto p-0 gap-10">
@@ -224,8 +225,7 @@ export default function AdminConsolePage() {
           </TabsContent>
 
         </Tabs>
-      </div>
-    </div>
+    </AppPage>
   );
 }
 

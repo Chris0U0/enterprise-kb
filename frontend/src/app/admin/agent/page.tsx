@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState } from 'react';
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { AppPage, PageHeader } from "@/components/shared/page-layout";
+import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +25,7 @@ import {
 } from "lucide-react";
 
 export default function AgentOrchestrationPage() {
+  const pathname = usePathname();
   const [activeTab, setActiveTab] = useState('prompt');
   
   const [prompt, setPrompt] = useState(
@@ -36,26 +40,31 @@ export default function AgentOrchestrationPage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-background p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* 顶部 */}
-        <div className="border-b border-border pb-6 flex justify-between items-end">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-serif italic font-bold tracking-tight">页面 B：Agent 指令与工具编排</h1>
-            <p className="text-muted-foreground italic text-sm">
-              定义 Agent 的核心“人格”与能力边界：动态启用 Skill 并调整 System Prompt。
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-2 h-9 border-primary/20 bg-primary/5 text-primary">
+    <AppPage surface="canvas">
+      <PageHeader
+        title="Agent 指令与工具编排"
+        description='定义 Agent 的核心「人格」与能力边界：动态启用 Skill 并调整 System Prompt。'
+        breadcrumbs={breadcrumbsFromPathname(pathname)}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-2 border-primary/20 bg-primary/5 text-primary"
+              type="button"
+            >
               <History size={14} /> 恢复默认配置
             </Button>
-            <Button size="sm" className="gap-2 h-9 bg-primary shadow-lg hover:shadow-primary/20">
+            <Button
+              size="sm"
+              className="h-9 gap-2 bg-primary shadow-lg hover:shadow-primary/20"
+              type="button"
+            >
               <Save size={14} /> 保存所有更改
             </Button>
           </div>
-        </div>
+        }
+      />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
@@ -151,7 +160,6 @@ export default function AgentOrchestrationPage() {
           </div>
 
         </div>
-      </div>
-    </div>
+    </AppPage>
   );
 }

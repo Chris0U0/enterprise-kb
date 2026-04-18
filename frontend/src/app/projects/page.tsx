@@ -3,6 +3,8 @@
 import { cn } from "@/lib/utils";
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { AppPage, PageHeader, PageToolbar } from "@/components/shared/page-layout";
+import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,63 +39,61 @@ export default function ProjectsListPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F9F7F2] p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-10">
-        
-        {/* 头部标题与操作 */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-border pb-8 gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-              <Link href="/" className="hover:text-primary transition-colors italic">工作台</Link>
-              <span>/</span>
-              <span className="font-medium text-foreground italic">项目管理</span>
-            </div>
-            <h1 className="text-4xl font-bold italic tracking-tight font-serif flex items-center gap-4">
-              <FolderKanban size={36} className="text-primary/60" />
-              所有项目看板
-            </h1>
-          </div>
-          <div className="flex gap-4 items-center">
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input 
-                placeholder="搜索项目名称或描述..." 
-                className="pl-10 h-11 bg-white border-border shadow-sm font-sans" 
+    <AppPage>
+      <PageHeader
+        title="所有项目看板"
+        icon={<FolderKanban className="h-9 w-9 text-primary/60" />}
+        breadcrumbs={breadcrumbsFromPathname("/projects")}
+        actions={
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+            <div className="relative w-full min-w-0 sm:w-64">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="搜索项目名称或描述..."
+                className="h-11 border-border bg-white pl-10 font-sans shadow-sm"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="搜索项目"
               />
             </div>
-            <Button className="h-11 px-6 bg-primary text-primary-foreground gap-2 font-bold tracking-widest uppercase text-xs shadow-lg">
+            <Button className="h-11 gap-2 bg-primary px-6 text-xs font-bold uppercase tracking-widest text-primary-foreground shadow-lg">
               <Plus size={18} />
               新建项目
             </Button>
           </div>
-        </div>
+        }
+      />
 
-        {/* 视图切换 */}
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Button 
-              variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
-              size="icon" 
-              className="h-10 w-10 border border-border bg-white"
-              onClick={() => setViewMode('grid')}
-            >
-              <LayoutGrid size={18} />
-            </Button>
-            <Button 
-              variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
-              size="icon" 
-              className="h-10 w-10 border border-border bg-white"
-              onClick={() => setViewMode('list')}
-            >
-              <List size={18} />
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold">
+      <PageToolbar
+        end={
+          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
             当前共有 {filteredProjects.length} 个活跃项目
           </p>
+        }
+      >
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant={viewMode === "grid" ? "secondary" : "ghost"}
+            size="icon"
+            className="h-10 w-10 border border-border bg-white"
+            onClick={() => setViewMode("grid")}
+            aria-label="网格视图"
+          >
+            <LayoutGrid size={18} />
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === "list" ? "secondary" : "ghost"}
+            size="icon"
+            className="h-10 w-10 border border-border bg-white"
+            onClick={() => setViewMode("list")}
+            aria-label="列表视图"
+          >
+            <List size={18} />
+          </Button>
         </div>
+      </PageToolbar>
 
         {/* 项目展示区 */}
         {viewMode === 'grid' ? (
@@ -152,8 +152,7 @@ export default function ProjectsListPage() {
             </CardContent>
           </Card>
         )}
-      </div>
-    </div>
+    </AppPage>
   );
 }
 

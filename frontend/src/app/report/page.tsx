@@ -2,6 +2,8 @@
 
 import { cn } from "@/lib/utils";
 import React, { useState } from 'react';
+import { AppPage, PageHeader } from "@/components/shared/page-layout";
+import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,24 +40,20 @@ export default function ReportBuilderPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* 头部 */}
-        <div className="flex justify-between items-end border-b border-border pb-6">
-          <div className="space-y-1">
-            <h1 className="text-4xl font-bold italic tracking-tight font-serif">报告生成与导出</h1>
-            <p className="text-muted-foreground">利用 ReportGenerationSkill 一键生成多维度项目分析报告。</p>
-          </div>
-          <div className="flex gap-3">
-             <Button variant="outline" className="gap-2">
-                <History size={16} />
-                历史记录
-             </Button>
-          </div>
-        </div>
+    <AppPage surface="canvas">
+      <PageHeader
+        title="报告生成与导出"
+        description="利用 ReportGenerationSkill 一键生成多维度项目分析报告。"
+        breadcrumbs={breadcrumbsFromPathname("/report")}
+        actions={
+          <Button variant="outline" className="gap-2">
+            <History size={16} />
+            历史记录
+          </Button>
+        }
+      />
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
           
           {/* 左侧：模板选择 */}
           <div className="lg:col-span-1 space-y-4">
@@ -221,7 +219,6 @@ export default function ReportBuilderPage() {
             </Card>
           </div>
         </div>
-      </div>
-    </div>
+    </AppPage>
   );
 }

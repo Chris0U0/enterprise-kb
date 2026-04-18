@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState } from 'react';
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { AppPage, PageHeader } from "@/components/shared/page-layout";
+import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +22,7 @@ import {
 } from "lucide-react";
 
 export default function IngestionApprovalPage() {
+  const pathname = usePathname();
   const [items, setItems] = useState([
     { id: 1, name: "2026年Q1财务预算.xlsx", uploader: "张财务", size: "2.4MB", time: "2026-04-16 10:00", status: "pending", risk: "low" },
     { id: 2, name: "核心代码逻辑V3_说明.pdf", uploader: "李开发", size: "890KB", time: "2026-04-16 11:30", status: "pending", risk: "high" },
@@ -26,22 +30,22 @@ export default function IngestionApprovalPage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-background p-8 font-sans">
-      <div className="max-w-6xl mx-auto space-y-8">
-        
-        {/* 标题 */}
-        <div className="border-b border-border pb-6 flex justify-between items-end">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-serif italic font-bold tracking-tight">页面 A：知识入库审批</h1>
-            <p className="text-muted-foreground italic text-sm">
-              针对企业核心敏感文档的“人机协同”验证：只有经过审批的文档才会被向量化并加入 RAG 检索。
-            </p>
+    <AppPage maxWidth="6xl" surface="canvas">
+      <PageHeader
+        title="知识入库审批"
+        description='针对企业核心敏感文档的「人机协同」验证：只有经过审批的文档才会被向量化并加入 RAG 检索。'
+        breadcrumbs={breadcrumbsFromPathname(pathname)}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" className="gap-2" type="button">
+              <Filter size={14} /> 筛选状态
+            </Button>
+            <Badge className="h-7 border-primary/20 bg-primary/10 px-3 text-primary">
+              2 个待处理
+            </Badge>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-2"><Filter size={14} /> 筛选状态</Button>
-            <Badge className="bg-primary/10 text-primary border-primary/20 h-7 px-3">2 个待处理</Badge>
-          </div>
-        </div>
+        }
+      />
 
         {/* 审批列表 */}
         <div className="space-y-4">
@@ -122,7 +126,6 @@ export default function IngestionApprovalPage() {
         <div className="text-center pt-8 opacity-40 italic font-serif text-sm">
           -- 所有审批记录均已同步至不可变审计日志 --
         </div>
-      </div>
-    </div>
+    </AppPage>
   );
 }

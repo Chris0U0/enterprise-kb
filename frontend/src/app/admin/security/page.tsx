@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState } from 'react';
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { AppPage, PageHeader } from "@/components/shared/page-layout";
+import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +26,7 @@ import {
 } from "lucide-react";
 
 export default function SecurityCenterPage() {
+  const pathname = usePathname();
   const securityEvents = [
     { id: 1, type: "PII Detected", desc: "检出疑似身份证号", file: "HR_Export.csv", time: "2小时前", action: "Masked" },
     { id: 2, type: "Unauthorized Access", desc: "试图跨权限访问图谱节点", user: "viewer@example.com", time: "4小时前", action: "Blocked" },
@@ -30,28 +34,33 @@ export default function SecurityCenterPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* 顶部 */}
-        <div className="border-b border-border pb-6 flex justify-between items-end">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-serif italic font-bold tracking-tight">页面 D：安全合规与脱敏中心</h1>
-            <p className="text-muted-foreground italic text-sm">
-              企业级数据安全审计：自动识别 PII 敏感信息（脱敏）、监控异常行为并确保满足合规性标准。
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-2 h-9 border-primary/20 bg-primary/5 text-primary">
+    <AppPage surface="canvas">
+      <PageHeader
+        title="安全合规与脱敏中心"
+        description="企业级数据安全审计：自动识别 PII 敏感信息（脱敏）、监控异常行为并确保满足合规性标准。"
+        breadcrumbs={breadcrumbsFromPathname(pathname)}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-2 border-primary/20 bg-primary/5 text-primary"
+              type="button"
+            >
               <History size={14} /> 审计追踪流水
             </Button>
-            <Button size="sm" className="gap-2 h-9 bg-primary shadow-lg hover:shadow-primary/20">
-               <ShieldCheck size={14} /> 启动全库扫描
+            <Button
+              size="sm"
+              className="h-9 gap-2 bg-primary shadow-lg hover:shadow-primary/20"
+              type="button"
+            >
+              <ShieldCheck size={14} /> 启动全库扫描
             </Button>
           </div>
-        </div>
+        }
+      />
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
           
           {/* 左侧统计 */}
           <div className="lg:col-span-1 space-y-6">
@@ -170,7 +179,6 @@ export default function SecurityCenterPage() {
           </div>
 
         </div>
-      </div>
-    </div>
+    </AppPage>
   );
 }

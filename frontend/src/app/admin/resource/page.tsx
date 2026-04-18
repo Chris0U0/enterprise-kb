@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState } from 'react';
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { AppPage, PageHeader } from "@/components/shared/page-layout";
+import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +25,7 @@ import {
 } from "lucide-react";
 
 export default function ResourceQuotaPage() {
+  const pathname = usePathname();
   const departments = [
     { id: 1, name: "研发中心 (R&D)", storage: 45, tokens: 68, cost: "¥1,240.50", trend: 'up' },
     { id: 2, name: "财务部 (Finance)", storage: 12, tokens: 24, cost: "¥320.20", trend: 'down' },
@@ -29,27 +33,25 @@ export default function ResourceQuotaPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* 顶部 */}
-        <div className="border-b border-border pb-6 flex justify-between items-end">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-serif italic font-bold tracking-tight">页面 C：数据隔离与资源配额</h1>
-            <p className="text-muted-foreground italic text-sm">
-              针对企业多部门租户（Multi-tenancy）的资源监控：管理存储上限与 LLM Token 计费。
-            </p>
-          </div>
-          <div className="flex gap-3 items-center">
-            <div className="text-right space-y-1 mr-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">总预算余额</p>
-              <p className="text-2xl font-serif italic font-bold tracking-tighter">¥12,450.00</p>
+    <AppPage surface="canvas">
+      <PageHeader
+        title="数据隔离与资源配额"
+        description="针对企业多部门租户（Multi-tenancy）的资源监控：管理存储上限与 LLM Token 计费。"
+        breadcrumbs={breadcrumbsFromPathname(pathname)}
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="mr-0 space-y-1 text-right sm:mr-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                总预算余额
+              </p>
+              <p className="text-2xl font-serif font-bold italic tracking-tighter">¥12,450.00</p>
             </div>
-            <Button size="sm" className="gap-2 h-9 bg-primary">
+            <Button size="sm" className="h-9 gap-2 bg-primary" type="button">
               <Coins size={14} /> 充值额度
             </Button>
           </div>
-        </div>
+        }
+      />
 
         {/* 概览统计 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -164,7 +166,6 @@ export default function ResourceQuotaPage() {
              </table>
           </CardContent>
         </Card>
-      </div>
-    </div>
+    </AppPage>
   );
 }
