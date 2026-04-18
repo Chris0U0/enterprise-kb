@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import React from 'react';
 import Link from 'next/link';
-import { useParams, usePathname } from 'next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { AppPage, PageHeader } from "@/components/shared/page-layout";
 import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { useAuth } from "@/lib/auth-context";
@@ -27,7 +27,11 @@ import {
   CheckCircle2,
   Clock,
   MoreVertical,
-  Trash2
+  Trash2,
+  Library,
+  MessageSquareText,
+  PackageOpen,
+  UsersRound
 } from "lucide-react";
 
 export default function ProjectDashboardPage() {
@@ -90,6 +94,34 @@ export default function ProjectDashboardPage() {
           </div>
         }
       />
+
+        <Card className="paper-border border-primary/15 bg-primary/5">
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <p className="text-sm font-medium">在本项目中继续</p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" size="sm" asChild>
+                <Link href={`/projects/${id}/knowledge`} className="gap-1.5">
+                  <Library size={14} /> 知识库
+                </Link>
+              </Button>
+              <Button variant="secondary" size="sm" asChild>
+                <Link href={`/projects/${id}/qa`} className="gap-1.5">
+                  <MessageSquareText size={14} /> 问答记录
+                </Link>
+              </Button>
+              <Button variant="secondary" size="sm" asChild>
+                <Link href={`/projects/${id}/artifacts`} className="gap-1.5">
+                  <PackageOpen size={14} /> 产出物
+                </Link>
+              </Button>
+              <Button variant="secondary" size="sm" asChild>
+                <Link href={`/projects/${id}/collab`} className="gap-1.5">
+                  <UsersRound size={14} /> 协作空间
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* 核心仪表盘网格 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

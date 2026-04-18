@@ -5,6 +5,9 @@ const SEGMENT_LABELS: Record<string, string> = {
   projects: "项目管理",
   copilot: "AI 研读室",
   knowledge: "知识库管理",
+  qa: "问答记录",
+  artifacts: "产出物",
+  collab: "协作空间",
   graph: "图谱探索",
   report: "报告中心",
   admin: "系统设置",
@@ -39,9 +42,15 @@ export function breadcrumbsFromPathname(
     acc += `/${seg}`;
     const isLast = i === parts.length - 1;
     const overrideKey = acc;
-    let label =
-      overrides?.segmentLabels?.[overrideKey] ??
-      (isLikelyIdSegment(seg) ? "项目详情" : SEGMENT_LABELS[seg] ?? seg);
+    const prev = i > 0 ? parts[i - 1] : "";
+    let label = overrides?.segmentLabels?.[overrideKey];
+    if (!label) {
+      if (prev === "qa") label = "会话详情";
+      else if (prev === "artifacts") label = "产出物详情";
+      else if (prev === "collab") label = "协作文档";
+      else if (isLikelyIdSegment(seg)) label = "项目详情";
+      else label = SEGMENT_LABELS[seg] ?? seg;
+    }
 
     if (seg === "admin" && !isLast) {
       label = "系统设置";
