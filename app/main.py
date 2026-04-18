@@ -18,6 +18,8 @@ from app.api.search import router as search_router
 from app.api.mcp import router as mcp_router
 from app.api.graph import router as graph_router
 from app.api.evaluation import router as evaluation_router
+from app.api.auth import router as auth_router
+from app.api.projects import router as projects_router
 
 settings = get_settings()
 
@@ -137,6 +139,8 @@ app.include_router(search_router, prefix="/api/v1")
 app.include_router(mcp_router, prefix="/api/v1")
 app.include_router(graph_router, prefix="/api/v1")
 app.include_router(evaluation_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(projects_router, prefix="/api/v1")
 
 
 @app.get("/")
@@ -172,16 +176,16 @@ async def root():
     }
 
 
-@app.get("/health")
-async def health():
-    """健康检查"""
+async def _health_payload() -> dict:
     checks = {}
 
     # PostgreSQL
     try:
+        from sqlalchemy import text
+
         from app.core.database import engine
         async with engine.connect() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
         checks["postgres"] = "ok"
     except Exception as e:
         checks["postgres"] = f"error: {e}"
@@ -223,3 +227,15 @@ async def health():
 
     all_ok = all("ok" in str(v) for v in checks.values())
     return {"status": "healthy" if all_ok else "degraded", "checks": checks}
+
+
+@app.get("/health")
+async def health():
+    """健康检查"""
+    return await _health_payload()
+
+
+@app.get("/api/v1/health")
+async def health_api_v1():
+    """与 `/health` 相同，便于前端统一使用 `/api/v1` 前缀。"""
+    return await _health_payload()

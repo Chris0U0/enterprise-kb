@@ -52,7 +52,7 @@ enterprise-kb/
 │       └── checksum.py            # MD5 校验
 ├── config/
 │   └── settings.yaml              # 环境配置
-├── alembic/                       # 数据库迁移 (需 alembic init)
+├── alembic/                       # Alembic 迁移脚本
 ├── docker-compose.yml             # 基础设施编排
 ├── Dockerfile
 ├── requirements.txt
@@ -63,21 +63,33 @@ enterprise-kb/
 ## 快速启动
 
 ```bash
-# 1. 启动基础设施
-docker-compose up -d
+# 1. 启动基础设施（首次会执行 scripts/init_db.sql 建库）
+docker compose up -d
 
-# 2. 安装依赖
+# 2. 复制环境变量并填写 ANTHROPIC_API_KEY 等
+copy .env.example .env
+
+# 3. 安装依赖
 pip install -r requirements.txt
 
-# 3. 初始化数据库
+# 4. 自动迁移（补齐 ORM 相对 init_db.sql 的增量，例如 users 表）
 alembic upgrade head
 
-# 4. 启动服务
+# 5. （可选）写入默认管理员 — 需先完成第 4 步
+python scripts/seed_default_user.py
+
+# 6. 启动 API
 uvicorn app.main:app --reload --port 8000
 
-# 5. 启动 Celery worker (异步转换任务)
+# 7. （可选）Celery worker — 文档异步转换
 celery -A app.core.celery_app worker --loglevel=info
 ```
+
+### 数据库迁移（Alembic）
+
+- 应用增量变更：`alembic upgrade head`
+- 修改 `app/models/database.py` 后生成新脚本：`alembic revision --autogenerate -m "描述"`，检查 `alembic/versions/` 后再执行 `alembic upgrade head`
+- 连接串来自 `.env`（`DATABASE_URL_SYNC` / `psycopg2`），与 FastAPI 使用同一 PostgreSQL
 
 ## 技术栈
 - **LLM**: Claude claude-sonnet-4-6

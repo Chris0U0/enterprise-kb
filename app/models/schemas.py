@@ -238,3 +238,99 @@ class SSEEvent(BaseModel):
     """SSE 事件定义 (用于文档说明)"""
     event: str = Field(..., description="事件类型: step|thinking|chunk|citation|done|error")
     data: dict = Field(..., description="事件数据 JSON")
+
+
+# ── Auth & Projects（前端对接扩展）────────────────────────
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255)
+    password: str = Field(..., min_length=1, max_length=128)
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=10)
+
+
+class UserPublic(BaseModel):
+    """与前端 auth-context 对齐的 User"""
+
+    id: str
+    email: str
+    name: str
+    role: str  # Admin | Editor | Viewer
+
+    class Config:
+        from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "Bearer"
+    expires_in: int  # 秒
+    refresh_token: str | None = None
+    refresh_expires_in: int | None = None
+    user: UserPublic
+
+
+class ProjectCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: str | None = None
+
+
+class ProjectUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    stage: str | None = Field(default=None, max_length=50)
+
+
+class ProjectListItem(BaseModel):
+    id: str
+    name: str
+    description: str | None
+    phase: str
+    member_count: int
+    document_count: int
+    health: str  # good | warning | critical
+    last_update_at: datetime | None
+    pending_summary: str
+
+
+class ProjectOnboarding(BaseModel):
+    has_uploaded_doc: bool
+    has_indexed_knowledge: bool
+    has_tried_qa: bool
+    has_viewed_risk_or_report: bool
+
+
+class ProjectHealthMetrics(BaseModel):
+    progress: int = 0
+    risk: int = 0
+    quality: int = 0
+
+
+class ProjectDetail(BaseModel):
+    id: str
+    name: str
+    description: str | None
+    phase: str
+    health: ProjectHealthMetrics
+    timeline: list[dict] = []
+    last_report_excerpt: str | None = None
+    onboarding: ProjectOnboarding
+
+
+class ProjectMemberItem(BaseModel):
+    user_id: str
+    email: str
+    name: str
+    role: str  # Admin | Editor | Viewer
+    joined_at: datetime
+
+
+class ProjectMemberAdd(BaseModel):
+    user_id: uuid.UUID
+    role: str = "viewer"
+
+
+class ProjectMemberRoleUpdate(BaseModel):
+    role: str

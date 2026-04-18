@@ -20,6 +20,22 @@ def new_uuid():
     return uuid.uuid4()
 
 
+class User(Base):
+    """平台用户（登录与全局角色）；项目内角色见 ProjectMember.role。"""
+
+    __tablename__ = "users"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False)
+    # 全局角色：admin / editor / viewer（序列化给前端时映射为 Admin / Editor / Viewer）
+    role = Column(String(20), nullable=False, default="viewer")
+    org_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
 class Project(Base):
     __tablename__ = "projects"
 

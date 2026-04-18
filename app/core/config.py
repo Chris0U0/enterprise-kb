@@ -6,6 +6,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import URL
 
 
 class Settings(BaseSettings):
@@ -16,6 +17,14 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     MAX_UPLOAD_SIZE_MB: int = 100
 
+    # ── Auth (JWT) ───────────────────────────────────────
+    JWT_SECRET_KEY: str = "change-me-in-production-use-long-random-string"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # 单租户默认组织（项目 org_id、用户归属）
+    DEFAULT_ORG_ID: str = "00000000-0000-0000-0000-000000000001"
+
     # ── PostgreSQL ───────────────────────────────────────
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
@@ -23,19 +32,24 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "kb_admin"
     POSTGRES_PASSWORD: str = "changeme"
 
-    @property
-    def DATABASE_URL(self) -> str:
-        return (
-            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+    def _postgres_url(self, drivername: str) -> URL:
+        """用 URL.create 传参，避免手写 URL 在 Windows/特殊字符下触发编码错误。"""
+        return URL.create(
+            drivername,
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD,
+            host=self.POSTGRES_HOST,
+            port=self.POSTGRES_PORT,
+            database=self.POSTGRES_DB,
         )
 
     @property
-    def DATABASE_URL_SYNC(self) -> str:
-        return (
-            f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
+    def DATABASE_URL(self) -> URL:
+        return self._postgres_url("postgresql+asyncpg")
+
+    @property
+    def DATABASE_URL_SYNC(self) -> URL:
+        return self._postgres_url("postgresql+psycopg2")
 
     # ── Qdrant ───────────────────────────────────────────
     QDRANT_HOST: str = "localhost"

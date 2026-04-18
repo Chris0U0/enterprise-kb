@@ -1,0 +1,17 @@
+# openai-whisper (optional audio transcription)
+#
+# Do NOT run as a single "pip install -r" with whisper: pip may build whisper
+# before setuptools is downgraded, and setuptools 82+ breaks "import pkg_resources"
+# in whisper's setup.py.
+#
+# Run these commands IN ORDER in the same environment:
+#
+#   1) pip install "setuptools>=69,<82"
+#   2) python -c "import pkg_resources; print('pkg_resources ok')"
+#   3) pip install --no-build-isolation openai-whisper==20240930
+#
+# If step 2 fails, try: pip install "setuptools==70.0.0"
+#
+# FFmpeg must be on PATH: https://ffmpeg.org/
+#
+# Alternative (often easiest on Windows): conda install -c conda-forge openai-whisper
