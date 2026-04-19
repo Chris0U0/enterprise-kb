@@ -85,6 +85,20 @@ uvicorn app.main:app --reload --port 8000
 celery -A app.core.celery_app worker --loglevel=info
 ```
 
+### Docker 构建 Celery 镜像（依赖基础镜像）
+
+`requirements.txt` 较大（含 PyTorch 等），建议先构建依赖层镜像，再构建 worker，避免每次改业务代码都重装依赖：
+
+```bash
+# Windows PowerShell
+.\scripts\docker-build-base.ps1
+
+# Linux / macOS
+sh scripts/docker-build-base.sh
+
+docker compose build celery-worker celery-beat
+```
+
 ### 数据库迁移（Alembic）
 
 - 应用增量变更：`alembic upgrade head`

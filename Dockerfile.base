@@ -1,0 +1,23 @@
+# 依赖基础镜像：仅安装系统包 + pip 依赖（torch/transformers 等大包只构建一次）
+# 使用方式（项目根目录）:
+#   docker build -f Dockerfile.base -t enterprise-kb/python-deps:3.11 .
+# 之后构建应用镜像会复用该层，仅 COPY 代码，显著加快迭代。
+#
+# 若修改了 requirements.txt，需重新执行上述命令。
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# 占位；应用镜像会覆盖 CMD
+CMD ["python", "-c", "import sys; print('enterprise-kb python-deps', sys.version)"]

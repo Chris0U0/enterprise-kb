@@ -1,0 +1,38 @@
+# 缩小构建上下文（避免把前端、缓存、大目录打进 500MB+ 的 context）
+.git
+.gitignore
+.cursor
+*.md
+docs/
+
+# 前端（API/Celery 镜像不需要）
+frontend/
+**/node_modules/
+**/.next/
+**/dist/
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+venv/
+.venv/
+env/
+
+# 环境与密钥（运行时由 compose / 宿主机注入）
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+
+# 日志与临时
+*.log
+tmp/
+temp/

@@ -1,19 +1,9 @@
-FROM python:3.11-slim
+# 应用镜像：基于 enterprise-kb/python-deps:3.11（须先用 Dockerfile.base 构建）
+ARG BASE_IMAGE=enterprise-kb/python-deps:3.11
+FROM ${BASE_IMAGE}
 
 WORKDIR /app
 
-# 系统依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
-# Python 依赖
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# 应用代码
 COPY . .
 
 # 预下载模型（可选，构建时执行）
