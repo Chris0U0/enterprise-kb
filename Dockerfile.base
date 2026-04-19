@@ -1,11 +1,38 @@
+# syntax=docker/dockerfile:1.4
 # 依赖基础镜像：仅安装系统包 + pip 依赖（torch/transformers 等大包只构建一次）
-# 使用方式（项目根目录）:
+# 使用方式（项目根目录，建议开启 BuildKit: set DOCKER_BUILDKIT=1）:
 #   docker build -f Dockerfile.base -t enterprise-kb/python-deps:3.11 .
 # 之后构建应用镜像会复用该层，仅 COPY 代码，显著加快迭代。
 #
 # 若修改了 requirements.txt，需重新执行上述命令。
+#
+# PyTorch：默认从官方 CPU 轮安装，避免 PyPI 默认 manylinux + CUDA 依赖（约 1GB+ 级下载）。
+# 若 Worker 必须 GPU，请删除下方「先装 torch」步骤，并自行配置 CUDA 基础镜像与驱动。
 
 FROM python:3.11-slim
+
+# 国内构建时 apt 默认走 deb.debian.org 往往很慢：可切换阿里云镜像（海外构建请传 USE_APT_MIRROR=0）
+ARG USE_APT_MIRROR=1
+RUN set -eux; \
+    if [ "${USE_APT_MIRROR}" = "1" ]; then \
+      if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i 's|http://deb.debian.org/debian|https://mirrors.aliyun.com/debian|g' /etc/apt/sources.list.d/debian.sources; \
+        sed -i 's|https://deb.debian.org/debian|https://mirrors.aliyun.com/debian|g' /etc/apt/sources.list.d/debian.sources; \
+        sed -i 's|http://security.debian.org/debian-security|https://mirrors.aliyun.com/debian-security|g' /etc/apt/sources.list.d/debian.sources; \
+        sed -i 's|https://security.debian.org/debian-security|https://mirrors.aliyun.com/debian-security|g' /etc/apt/sources.list.d/debian.sources; \
+      fi; \
+      if [ -f /etc/apt/sources.list ]; then \
+        sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list; \
+      fi; \
+    fi
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=120
+
+# 国内构建时 PyPI 官方源较慢；海外请: --build-arg PYPI_INDEX=https://pypi.org/simple
+ARG PYPI_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 
 WORKDIR /app
 
@@ -16,8 +43,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+
+# 先固定 CPU 版 torch（仍走 PyTorch 官方 CPU 索引），再装其余依赖走 PYPI_INDEX 镜像
+# --prefer-binary 减少源码包编译；减轻 pip 对 onnxruntime 等包的反复回溯（仍可能较慢，属依赖体量问题）
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip -i ${PYPI_INDEX} && \
+    pip install 'torch>=2.1.0' --index-url https://download.pytorch.org/whl/cpu
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt -i ${PYPI_INDEX} --prefer-binary
 
 # 占位；应用镜像会覆盖 CMD
 CMD ["python", "-c", "import sys; print('enterprise-kb python-deps', sys.version)"]

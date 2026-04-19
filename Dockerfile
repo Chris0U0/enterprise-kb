@@ -1,6 +1,10 @@
+# syntax=docker/dockerfile:1.4
 # 应用镜像：基于 enterprise-kb/python-deps:3.11（须先用 Dockerfile.base 构建）
 ARG BASE_IMAGE=enterprise-kb/python-deps:3.11
 FROM ${BASE_IMAGE}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 

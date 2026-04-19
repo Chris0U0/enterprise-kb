@@ -90,14 +90,19 @@ celery -A app.core.celery_app worker --loglevel=info
 `requirements.txt` 较大（含 PyTorch 等），建议先构建依赖层镜像，再构建 worker，避免每次改业务代码都重装依赖：
 
 ```bash
+# 建议开启 BuildKit（Docker Desktop 通常默认已开），以使用 Dockerfile 内 pip 缓存挂载
+# Windows PowerShell: $env:DOCKER_BUILDKIT=1
+
 # Windows PowerShell
 .\scripts\docker-build-base.ps1
 
 # Linux / macOS
-sh scripts/docker-build-base.sh
+DOCKER_BUILDKIT=1 sh scripts/docker-build-base.sh
 
 docker compose build celery-worker celery-beat
 ```
+
+`Dockerfile.base` 内优先安装 **CPU 版 PyTorch**（体积与下载远小于默认 CUDA 依赖）。若必须在容器内使用 GPU，需改用 CUDA 基础镜像并调整 `Dockerfile.base` 中的 torch 安装方式。
 
 ### 数据库迁移（Alembic）
 

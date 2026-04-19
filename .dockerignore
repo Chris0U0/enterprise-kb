@@ -1,9 +1,18 @@
 # 缩小构建上下文（避免把前端、缓存、大目录打进 500MB+ 的 context）
 .git
 .gitignore
+.github
 .cursor
 *.md
 docs/
+
+# 打包产物 / 元数据
+*.egg-info
+dist/
+build/
+htmlcov/
+.coverage
+coverage.xml
 
 # 前端（API/Celery 镜像不需要）
 frontend/
