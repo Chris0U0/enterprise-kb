@@ -26,14 +26,15 @@ qdrant-client==1.12.1
 # LLM / RAG (anthropic range matches marker-pdf: >=0.46,<0.47)
 anthropic>=0.46.0,<0.47.0
 openai>=1.40.0
-llama-index==0.12.5
-llama-index-core==0.12.5
+# 未接入代码：无 llama_index 导入，体积与传递依赖大，历史遗留
+# llama-index==0.12.5
+# llama-index-core==0.12.5
 langchain-core==0.3.28
 langgraph==0.2.60
 
-# LangGraph + SSE
+# LangGraph（SSE 使用 FastAPI StreamingResponse + app/services/streaming/sse.py，未用 sse_starlette）
 langgraph-checkpoint==2.0.10
-sse-starlette==2.1.3
+# sse-starlette==2.1.3
 
 # Embedding / reranker
 # FlagEmbedding 1.3.3 pinned transformers 4.44.2; 1.3.5 + explicit transformers satisfies marker-pdf
@@ -69,7 +70,8 @@ python-dotenv==1.0.1
 httpx==0.28.1
 # llama-index-legacy pins tenacity<9; cannot use 9.0.0
 tenacity==8.5.0
-structlog==24.4.0
+# 未使用：项目用标准库 logging
+# structlog==24.4.0
 
 # GraphRAG
 kuzu==0.6.0
@@ -78,5 +80,5 @@ kuzu==0.6.0
 ragas==0.2.6
 datasets==2.19.0
 
-# Monitoring
-prometheus-client==0.21.0
+# Monitoring（未使用 metrics 代码）
+# prometheus-client==0.21.0

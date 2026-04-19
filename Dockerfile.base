@@ -4,26 +4,32 @@
 #   docker build -f Dockerfile.base -t enterprise-kb/python-deps:3.11 .
 # 之后构建应用镜像会复用该层，仅 COPY 代码，显著加快迭代。
 #
+# 海外网络（VPN/境外机）最快：官方 Debian + 官方 PyPI + 已固定的 PyTorch CPU 索引，勿用国内镜像
+#   docker build -f Dockerfile.base -t enterprise-kb/python-deps:3.11 \
+#     --build-arg USE_APT_MIRROR=0 \
+#     --build-arg PYPI_INDEX=https://pypi.org/simple .
+#
 # 若修改了 requirements.txt，需重新执行上述命令。
 #
 # PyTorch：默认从官方 CPU 轮安装，避免 PyPI 默认 manylinux + CUDA 依赖（约 1GB+ 级下载）。
 # 若 Worker 必须 GPU，请删除下方「先装 torch」步骤，并自行配置 CUDA 基础镜像与驱动。
+#
+# apt 镜像（国内加速，默认开）：--build-arg APT_MIRROR_HOST=mirrors.aliyun.com
+# 清华示例：APT_MIRROR_HOST=mirrors.tuna.tsinghua.edu.cn
+# 海外官方源：USE_APT_MIRROR=0
 
 FROM python:3.11-slim
 
-# 国内构建时 apt 默认走 deb.debian.org 往往很慢：可切换阿里云镜像（海外构建请传 USE_APT_MIRROR=0）
 ARG USE_APT_MIRROR=1
+# 仅替换主机名，兼容 deb822（debian.sources）里 http/https 任意写法，避免仍走 deb.debian.org
+ARG APT_MIRROR_HOST=mirrors.aliyun.com
 RUN set -eux; \
     if [ "${USE_APT_MIRROR}" = "1" ]; then \
-      if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
-        sed -i 's|http://deb.debian.org/debian|https://mirrors.aliyun.com/debian|g' /etc/apt/sources.list.d/debian.sources; \
-        sed -i 's|https://deb.debian.org/debian|https://mirrors.aliyun.com/debian|g' /etc/apt/sources.list.d/debian.sources; \
-        sed -i 's|http://security.debian.org/debian-security|https://mirrors.aliyun.com/debian-security|g' /etc/apt/sources.list.d/debian.sources; \
-        sed -i 's|https://security.debian.org/debian-security|https://mirrors.aliyun.com/debian-security|g' /etc/apt/sources.list.d/debian.sources; \
-      fi; \
-      if [ -f /etc/apt/sources.list ]; then \
-        sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list; \
-      fi; \
+      for f in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/*.sources; do \
+        [ -f "$f" ] || continue; \
+        sed -i "s|deb.debian.org|${APT_MIRROR_HOST}|g" "$f"; \
+        sed -i "s|security.debian.org|${APT_MIRROR_HOST}|g" "$f"; \
+      done; \
     fi
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
