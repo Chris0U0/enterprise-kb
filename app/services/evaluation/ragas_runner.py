@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.services.evaluation.dataset_builder import EvalSample
+from app.services.llm import complete_chat
 
 logger = logging.getLogger(__name__)
 
@@ -117,14 +118,9 @@ async def _run_with_llm_judge(
 ) -> EvalRunResult:
     """
     回退方案：LLM-as-Judge 简易评估。
-    不依赖 ragas 库，直接用 Claude 打分。
+    不依赖 ragas 库，直接用配置的 LLM 打分。
     """
-    import anthropic
     import json
-    from app.core.config import get_settings
-
-    settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
     eval_samples = []
     faith_scores = []
@@ -146,13 +142,7 @@ async def _run_with_llm_judge(
                 f"只返回 JSON。"
             )
 
-            message = await client.messages.create(
-                model=settings.ANTHROPIC_MODEL,
-                max_tokens=100,
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            raw = message.content[0].text.strip()
+            raw = (await complete_chat(prompt, max_tokens=100)).strip()
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):

@@ -6,9 +6,8 @@ from __future__ import annotations
 import json
 import logging
 
-import anthropic
-
 from app.core.config import get_settings
+from app.services.llm import complete_chat
 from app.services.graph.store import get_graph_store
 
 logger = logging.getLogger(__name__)
@@ -48,16 +47,8 @@ async def query_graph(query: str, project_id: str) -> str:
 
     # LLM 生成 Cypher
     try:
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
         prompt = TEXT2CYPHER_PROMPT.format(query=query, project_id=project_id)
-        message = await client.messages.create(
-            model=settings.ANTHROPIC_MODEL,
-            max_tokens=300,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        cypher = message.content[0].text.strip()
+        cypher = (await complete_chat(prompt, max_tokens=300)).strip()
         # 去掉 Markdown 代码块
         if cypher.startswith("```"):
             cypher = cypher.split("```")[1].strip()

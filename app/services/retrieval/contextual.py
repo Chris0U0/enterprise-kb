@@ -1,7 +1,7 @@
 """
 Contextual Retrieval（修正版）
 
-Fix #1: 使用 AsyncAnthropic 异步客户端，不阻塞 Event Loop
+Fix #1: LLM 经 app.services.llm（DashScope 兼容 / Claude），不阻塞 Event Loop
 Fix #4: 引入 Batching 机制 — 将多个 chunks 合并为单次 LLM 调用
         1000 chunks → ~50 次调用（batch_size=20），而非 1000 次
 
@@ -21,9 +21,8 @@ import logging
 from collections import OrderedDict
 from typing import Any
 
-import anthropic
-
 from app.core.config import get_settings
+from app.services.llm import complete_chat
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -79,7 +78,7 @@ class ContextualRetrieval:
     Contextual Retrieval 服务（优化版）
 
     核心改进：
-    - AsyncAnthropic 异步客户端
+    - 统一 LLM 客户端
     - Batch 批量处理: N chunks → ceil(N/batch_size) 次 LLM 调用
     - LRU 前缀缓存: 相同标题的 chunk 不重复调用 LLM
     """
@@ -168,16 +167,10 @@ class ContextualRetrieval:
     async def _generate_doc_summary(self, doc_content: str, doc_name: str) -> str:
         """生成文档级摘要 — 异步"""
         try:
-            client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
             truncated = doc_content[:6000]
             prompt = DOC_SUMMARY_PROMPT.format(doc_content=truncated)
 
-            message = await client.messages.create(
-                model=settings.ANTHROPIC_MODEL,
-                max_tokens=200,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            summary = message.content[0].text.strip()
+            summary = (await complete_chat(prompt, max_tokens=200)).strip()
             return f"文档「{doc_name}」：{summary}"
         except Exception as e:
             logger.warning(f"文档摘要生成失败: {e}")
@@ -209,14 +202,9 @@ class ContextualRetrieval:
                     chunks_block=chunks_block,
                 )
 
-                client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-                message = await client.messages.create(
-                    model=settings.ANTHROPIC_MODEL,
-                    max_tokens=100 * len(batch_sections),
-                    messages=[{"role": "user", "content": prompt}],
-                )
-
-                raw = message.content[0].text.strip()
+                raw = (
+                    await complete_chat(prompt, max_tokens=100 * len(batch_sections))
+                ).strip()
                 # 容错 JSON 解析
                 if raw.startswith("```"):
                     raw = raw.split("```")[1]

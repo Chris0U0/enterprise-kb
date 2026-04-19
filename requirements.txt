@@ -25,6 +25,7 @@ qdrant-client==1.12.1
 
 # LLM / RAG (anthropic range matches marker-pdf: >=0.46,<0.47)
 anthropic>=0.46.0,<0.47.0
+openai>=1.40.0
 llama-index==0.12.5
 llama-index-core==0.12.5
 langchain-core==0.3.28

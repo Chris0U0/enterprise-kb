@@ -1,6 +1,6 @@
 """
 Planner 节点 — 将复杂查询分解为最多 MAX_STEPS 个子任务
-使用 Claude 进行意图分析和任务分解
+使用配置的 LLM 进行意图分析和任务分解
 """
 from __future__ import annotations
 
@@ -8,9 +8,8 @@ import json
 import logging
 import time
 
-import anthropic
-
 from app.core.config import get_settings
+from app.services.llm import complete_chat
 from app.services.agentic.state import AgenticState, MAX_STEPS, PlanStep, StepStatus
 
 logger = logging.getLogger(__name__)
@@ -46,16 +45,13 @@ async def plan_node(state: AgenticState) -> dict:
     query = state["original_query"]
 
     try:
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
-        message = await client.messages.create(
-            model=settings.ANTHROPIC_MODEL,
-            max_tokens=1024,
-            system=PLAN_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": f"请为以下问题制定检索计划：\n\n{query}"}],
-        )
-
-        raw_text = message.content[0].text.strip()
+        raw_text = (
+            await complete_chat(
+                f"请为以下问题制定检索计划：\n\n{query}",
+                system=PLAN_SYSTEM_PROMPT,
+                max_tokens=1024,
+            )
+        ).strip()
 
         # 解析 JSON（容错处理）
         if raw_text.startswith("```"):

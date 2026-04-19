@@ -1,7 +1,7 @@
 """
 SSE 流式输出服务（修正版）
 
-Fix #1: 全面使用 AsyncAnthropic 异步客户端，不再阻塞 Event Loop
+LLM 流式输出经 app.services.llm（DashScope OpenAI 兼容 / Claude）。
 Fix #3: stream_agentic_rag 复用 LangGraph 状态机（通过 astream_events），
         不再手动重写循环逻辑，消除 DRY 违反
 
@@ -21,9 +21,8 @@ import logging
 import time
 from typing import AsyncGenerator
 
-import anthropic
-
 from app.core.config import get_settings
+from app.services.llm import stream_chat_chunks
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -36,7 +35,7 @@ def _sse_event(event_type: str, data: dict) -> str:
 
 
 # ══════════════════════════════════════════════════════════
-# 流式 LLM 调用 — 使用 AsyncAnthropic
+# 流式 LLM（DashScope 兼容 / Claude）
 # ══════════════════════════════════════════════════════════
 
 async def stream_llm_response(
@@ -44,23 +43,11 @@ async def stream_llm_response(
     system: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """
-    流式调用 Claude API（异步），逐 token 返回 SSE 事件。
-    使用 AsyncAnthropic 客户端，不阻塞 Event Loop。
+    流式调用 LLM，逐段返回 chunk SSE 事件。
     """
     try:
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
-        kwargs = {
-            "model": settings.ANTHROPIC_MODEL,
-            "max_tokens": 2048,
-            "messages": [{"role": "user", "content": prompt}],
-        }
-        if system:
-            kwargs["system"] = system
-
-        async with client.messages.stream(**kwargs) as stream:
-            async for text in stream.text_stream:
-                yield _sse_event("chunk", {"text": text})
+        async for text in stream_chat_chunks(prompt, system=system, max_tokens=2048):
+            yield _sse_event("chunk", {"text": text})
 
     except Exception as e:
         logger.error(f"流式 LLM 调用失败: {e}")

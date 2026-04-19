@@ -6,9 +6,8 @@ from __future__ import annotations
 import logging
 import time
 
-import anthropic
-
 from app.core.config import get_settings
+from app.services.llm import complete_chat
 from app.services.agentic.state import AgenticState, MIN_CONFIDENCE
 from app.services.retrieval.citation import build_citation
 
@@ -85,15 +84,11 @@ async def synthesizer_node(state: AgenticState) -> dict:
             f"请综合以上所有信息，生成完整答案。使用 [ref:N] 标注引用来源。"
         )
 
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        message = await client.messages.create(
-            model=settings.ANTHROPIC_MODEL,
-            max_tokens=2048,
+        final_answer = await complete_chat(
+            prompt,
             system=SYNTH_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2048,
         )
-
-        final_answer = message.content[0].text
 
         # 构建引用列表
         citations = []

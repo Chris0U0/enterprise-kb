@@ -8,9 +8,8 @@ import logging
 import time
 from enum import Enum
 
-import anthropic
-
 from app.core.config import get_settings
+from app.services.llm import complete_chat
 from app.services.skills.base import (
     BaseSkill, SkillInput, SkillOutput, register_skill,
 )
@@ -125,8 +124,6 @@ class ReportGenerationSkill(BaseSkill):
             )
 
         try:
-            client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
             template_prompt = TEMPLATE_PROMPTS.get(
                 template, TEMPLATE_PROMPTS[ReportTemplate.STAGE_SUMMARY]
             )
@@ -137,13 +134,7 @@ class ReportGenerationSkill(BaseSkill):
                 f"项目文档内容：\n{content[:12000]}"
             )
 
-            message = await client.messages.create(
-                model=settings.ANTHROPIC_MODEL,
-                max_tokens=4096,
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            result = message.content[0].text
+            result = await complete_chat(prompt, max_tokens=4096)
             duration_ms = (time.time() - start) * 1000
 
             return SkillOutput(

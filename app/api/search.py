@@ -20,6 +20,7 @@ from app.models.database import User
 from app.models.schemas import SearchRequest, SearchResponse, SearchResult
 from app.services.retrieval.router import route_query, RetrievalStrategy
 from app.services.retrieval.searcher import get_searcher
+from app.services.llm import complete_chat
 from app.services.retrieval.citation import build_citation, build_llm_context, generate_cited_answer
 from app.models.database import AuditLog
 
@@ -440,18 +441,9 @@ async def _mcp_search(request: SearchRequest, db: AsyncSession) -> tuple[list[Se
 
 
 async def _generate_answer(prompt: str) -> str:
-    """调用 Claude 生成答案"""
+    """调用配置的 LLM（DashScope / Claude）生成答案"""
     try:
-        import anthropic
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        message = await client.messages.create(
-            model=settings.ANTHROPIC_MODEL,
-            max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return message.content[0].text
-    except ImportError:
-        return "（LLM 服务不可用）"
+        return await complete_chat(prompt, max_tokens=2048)
     except Exception as e:
         logger.error(f"LLM 生成失败: {e}")
         return f"（答案生成失败: {e}）"

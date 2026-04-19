@@ -72,6 +72,14 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
 
     # ── LLM ──────────────────────────────────────────────
+    # openai_compat = 阿里云 DashScope OpenAI 兼容接口（推荐与通义千问配合）
+    # anthropic = Claude（AsyncAnthropic Messages API）
+    LLM_PROVIDER: str = "openai_compat"
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    OPENAI_MODEL: str = "qwen-plus"
+    # 图片理解（兼容模式多模态）；可与文本模型相同，建议使用 VL 系列
+    OPENAI_VISION_MODEL: str = "qwen-vl-plus"
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-20250514"
 

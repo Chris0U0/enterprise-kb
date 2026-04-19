@@ -7,9 +7,8 @@ from __future__ import annotations
 import logging
 import time
 
-import anthropic
-
 from app.core.config import get_settings
+from app.services.llm import complete_chat
 from app.services.skills.base import (
     BaseSkill, SkillInput, SkillOutput, register_skill,
 )
@@ -82,21 +81,13 @@ class ProjectHealthSkill(BaseSkill):
             )
 
         try:
-            client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
             prompt = (
                 f"{HEALTH_PROMPT}\n\n"
                 f"用户问题：{input.query}\n\n"
                 f"项目文档内容：\n{all_content[:10000]}"
             )
 
-            message = await client.messages.create(
-                model=settings.ANTHROPIC_MODEL,
-                max_tokens=2048,
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            result = message.content[0].text
+            result = await complete_chat(prompt, max_tokens=2048)
             duration_ms = (time.time() - start) * 1000
 
             return SkillOutput(

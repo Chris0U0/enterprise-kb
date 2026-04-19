@@ -34,6 +34,8 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="Asia/Shanghai",
     enable_utc=True,
+    # Celery 6+：启动时重试连 broker 的显式开关（消除弃用告警）
+    broker_connection_retry_on_startup=True,
     task_track_started=True,
     task_time_limit=600,
     task_soft_time_limit=540,

@@ -13,8 +13,6 @@ from __future__ import annotations
 import json
 import logging
 
-import anthropic
-
 from app.core.config import get_settings
 from app.services.agents.base import BaseAgent
 from app.services.agents.message import AgentMessage, AgentRole, TaskStatus

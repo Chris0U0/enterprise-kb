@@ -7,9 +7,8 @@ from __future__ import annotations
 import logging
 import time
 
-import anthropic
-
 from app.core.config import get_settings
+from app.services.llm import complete_chat
 from app.services.skills.base import (
     BaseSkill, SkillInput, SkillOutput, register_skill,
 )
@@ -57,8 +56,6 @@ class CrossDocumentCompareSkill(BaseSkill):
             )
 
         try:
-            client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
             docs_text = ""
             for i, (doc_name, content) in enumerate(docs_content, 1):
                 docs_text += f"\n{'='*40}\n文档 {i}: {doc_name}\n{'='*40}\n{content[:4000]}\n"
@@ -69,13 +66,7 @@ class CrossDocumentCompareSkill(BaseSkill):
                 f"待对比文档：\n{docs_text}"
             )
 
-            message = await client.messages.create(
-                model=settings.ANTHROPIC_MODEL,
-                max_tokens=2048,
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            result = message.content[0].text
+            result = await complete_chat(prompt, max_tokens=2048)
             duration_ms = (time.time() - start) * 1000
 
             return SkillOutput(

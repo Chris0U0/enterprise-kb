@@ -7,9 +7,8 @@ from __future__ import annotations
 import logging
 import time
 
-import anthropic
-
 from app.core.config import get_settings
+from app.services.llm import complete_chat
 from app.services.skills.base import (
     BaseSkill, SkillInput, SkillOutput, register_skill,
 )
@@ -57,8 +56,6 @@ class DocumentAnalysisSkill(BaseSkill):
 
         # 调用 LLM 分析
         try:
-            client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
             analysis_type = input.params.get("analysis_type", "comprehensive")
             type_hint = {
                 "budget": "请重点提取预算和财务相关数据",
@@ -74,13 +71,7 @@ class DocumentAnalysisSkill(BaseSkill):
                 f"文档内容：\n{doc_content[:8000]}"
             )
 
-            message = await client.messages.create(
-                model=settings.ANTHROPIC_MODEL,
-                max_tokens=2048,
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            result = message.content[0].text
+            result = await complete_chat(prompt, max_tokens=2048)
             duration_ms = (time.time() - start) * 1000
 
             return SkillOutput(

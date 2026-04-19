@@ -7,9 +7,8 @@ from __future__ import annotations
 import logging
 import time
 
-import anthropic
-
 from app.core.config import get_settings
+from app.services.llm import complete_chat
 from app.services.agentic.state import (
     AgenticState, MAX_LLM_CALLS, MIN_CONFIDENCE,
     StepStatus, AgenticTrace,
@@ -151,8 +150,6 @@ async def _execute_analysis(
     prior_results: list[str],
 ) -> tuple[str, list[dict], float]:
     """执行分析/比较/汇总动作"""
-    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
     # 构建上下文
     context_text = ""
     if contexts:
@@ -183,13 +180,7 @@ async def _execute_analysis(
 
 请直接给出分析结论："""
 
-    message = await client.messages.create(
-        model=settings.ANTHROPIC_MODEL,
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    result = message.content[0].text
+    result = await complete_chat(prompt, max_tokens=1024)
     # 分析动作的置信度基于上下文丰富度
     confidence = min(0.5 + len(contexts) * 0.05 + len(prior_results) * 0.1, 1.0)
 

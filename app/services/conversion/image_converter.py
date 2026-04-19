@@ -1,6 +1,6 @@
 """
 图片 → Markdown 转换器
-- 图表/流程图: Claude Vision API（提取数据点/识别结构）
+- 多模态 LLM：DashScope（OpenAI 兼容，通义千问 VL）或 Claude Vision
 - 纯文字 OCR: PaddleOCR（中文效果最佳）
 """
 from __future__ import annotations
@@ -11,6 +11,7 @@ import logging
 from pathlib import PurePosixPath
 
 from app.core.config import get_settings
+from app.services.llm import llm_configured_for_vision, vision_image_to_text
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -19,8 +20,8 @@ settings = get_settings()
 async def convert_image(file_data: bytes, filename: str) -> tuple[str, int | None]:
     """
     图片 → Markdown
-    优先使用 Claude Vision API 理解图片内容，
-    如果 API 不可用则回退到 PaddleOCR
+    优先使用多模态 LLM 理解图片内容，
+    若 API 不可用则回退到 PaddleOCR
 
     Returns: (markdown_text, page_count=1)
     """
@@ -33,15 +34,13 @@ async def convert_image(file_data: bytes, filename: str) -> tuple[str, int | Non
         "webp": "image/webp",
     }.get(ext, "image/png")
 
-    # 优先尝试 Claude Vision
-    if settings.ANTHROPIC_API_KEY:
+    if llm_configured_for_vision():
         try:
-            md_text = await _convert_with_claude_vision(file_data, media_type, filename)
+            md_text = await _convert_with_vision_llm(file_data, media_type, filename)
             return md_text, 1
         except Exception as e:
-            logger.warning(f"Claude Vision 转换失败，回退到 OCR: {e}")
+            logger.warning(f"多模态 LLM 转换失败，回退到 OCR: {e}")
 
-    # 回退到 PaddleOCR
     try:
         md_text = _convert_with_ocr(file_data, filename)
         return md_text, 1
@@ -50,46 +49,24 @@ async def convert_image(file_data: bytes, filename: str) -> tuple[str, int | Non
         return f"# {filename}\n\n*（图片内容无法自动提取，请人工标注）*", 1
 
 
-async def _convert_with_claude_vision(file_data: bytes, media_type: str, filename: str) -> str:
-    """使用 Claude Vision API 分析图片内容"""
-    import anthropic
-
-    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+async def _convert_with_vision_llm(file_data: bytes, media_type: str, filename: str) -> str:
+    """使用 DashScope 兼容多模态或 Claude Vision 分析图片内容"""
     b64_image = base64.b64encode(file_data).decode("utf-8")
-
-    message = await client.messages.create(
-        model=settings.ANTHROPIC_MODEL,
-        max_tokens=4096,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": b64_image,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            "请将这张图片的内容转换为结构化的 Markdown 格式。具体要求：\n"
-                            "1. 如果是图表（柱状图/折线图/饼图等），提取所有数据点，生成 Markdown 数据表格，并描述趋势\n"
-                            "2. 如果是流程图/架构图，识别所有节点和连接关系，用层级列表描述结构\n"
-                            "3. 如果是截图/文档图片，提取所有可见文字，保留原始格式\n"
-                            "4. 如果是照片/实物图，详细描述图片内容\n"
-                            "5. 使用中文输出，保留专业术语的英文原文\n"
-                            "直接输出 Markdown 内容，不要添加额外说明。"
-                        ),
-                    },
-                ],
-            }
-        ],
+    user_text = (
+        "请将这张图片的内容转换为结构化的 Markdown 格式。具体要求：\n"
+        "1. 如果是图表（柱状图/折线图/饼图等），提取所有数据点，生成 Markdown 数据表格，并描述趋势\n"
+        "2. 如果是流程图/架构图，识别所有节点和连接关系，用层级列表描述结构\n"
+        "3. 如果是截图/文档图片，提取所有可见文字，保留原始格式\n"
+        "4. 如果是照片/实物图，详细描述图片内容\n"
+        "5. 使用中文输出，保留专业术语的英文原文\n"
+        "直接输出 Markdown 内容，不要添加额外说明。"
     )
-
-    md_text = message.content[0].text
+    md_text = await vision_image_to_text(
+        b64_image=b64_image,
+        media_type=media_type,
+        user_text=user_text,
+        max_tokens=4096,
+    )
     return f"# {filename}\n\n{md_text}"
 
 

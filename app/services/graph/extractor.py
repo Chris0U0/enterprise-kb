@@ -8,9 +8,8 @@ import json
 import logging
 from dataclasses import dataclass
 
-import anthropic
-
 from app.core.config import get_settings
+from app.services.llm import complete_chat
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -65,16 +64,8 @@ async def extract_entities_relations(
         return [], []
 
     try:
-        client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-
         prompt = EXTRACT_PROMPT.format(content=content[:3000])
-        message = await client.messages.create(
-            model=settings.ANTHROPIC_MODEL,
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        raw = message.content[0].text.strip()
+        raw = (await complete_chat(prompt, max_tokens=1024)).strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):

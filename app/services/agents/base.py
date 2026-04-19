@@ -14,10 +14,9 @@ import logging
 import time
 from abc import ABC, abstractmethod
 
-import anthropic
-
 from app.core.config import get_settings
 from app.services.agents.message import AgentMessage, AgentRole, TaskStatus
+from app.services.llm import complete_chat_with_usage
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -28,15 +27,6 @@ class BaseAgent(ABC):
 
     role: AgentRole = AgentRole.ORCHESTRATOR
     name: str = "base_agent"
-
-    def __init__(self):
-        self._llm_client = None
-
-    @property
-    def llm(self) -> anthropic.AsyncAnthropic:
-        if self._llm_client is None:
-            self._llm_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        return self._llm_client
 
     async def handle(self, msg: AgentMessage) -> AgentMessage:
         """
@@ -78,17 +68,7 @@ class BaseAgent(ABC):
     async def call_llm(self, prompt: str, system: str | None = None, max_tokens: int = 1024) -> tuple[str, int]:
         """
         封装 LLM 调用，返回 (text, token_usage)。
-        统一计量 token 消耗。
+        统一计量 token 消耗（DashScope / Claude 由 chat 层适配）。
         """
-        kwargs = {
-            "model": settings.ANTHROPIC_MODEL,
-            "max_tokens": max_tokens,
-            "messages": [{"role": "user", "content": prompt}],
-        }
-        if system:
-            kwargs["system"] = system
-
-        message = await self.llm.messages.create(**kwargs)
-        text = message.content[0].text
-        usage = message.usage.input_tokens + message.usage.output_tokens
+        text, usage = await complete_chat_with_usage(prompt, system=system, max_tokens=max_tokens)
         return text, usage
