@@ -15,7 +15,11 @@ DENSE_DIM = 1024
 
 
 def get_qdrant() -> QdrantClient:
-    return QdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT)
+    return QdrantClient(
+        host=settings.QDRANT_HOST,
+        port=settings.QDRANT_PORT,
+        trust_env=False  # 禁用从环境变量读取代理配置，解决本地访问 502 问题
+    )
 
 
 def ensure_collection(client: QdrantClient | None = None):

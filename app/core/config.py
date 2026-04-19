@@ -54,7 +54,8 @@ class Settings(BaseSettings):
         return self._postgres_url("postgresql+psycopg2")
 
     # ── Qdrant ───────────────────────────────────────────
-    QDRANT_HOST: str = "localhost"
+    # 默认用 127.0.0.1：Windows 上 localhost 常解析到 IPv6，Docker 映射 6333 时易导致与 curl(IPv4) 行为不一致（502）
+    QDRANT_HOST: str = "127.0.0.1"
     QDRANT_PORT: int = 6333
     QDRANT_GRPC_PORT: int = 6334
     QDRANT_COLLECTION: str = "kb_documents"
