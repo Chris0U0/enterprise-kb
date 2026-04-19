@@ -58,67 +58,16 @@ services:
       timeout: 3s
       retries: 5
 
-  # ── Phase 3: Celery Worker ─────────────────────────────────
-  # 应用镜像基于 enterprise-kb/python-deps:3.11；首次或 requirements 变更请先:
-  #   docker build -f Dockerfile.base -t enterprise-kb/python-deps:3.11 .
-  # 详见 Dockerfile.base、scripts/docker-build-base.*
-  celery-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        BASE_IMAGE: enterprise-kb/python-deps:3.11
-    container_name: kb-celery-worker
-    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_started
-      minio:
-        condition: service_started
-    env_file: .env
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: "5432"
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
-      QDRANT_HOST: qdrant
-      QDRANT_PORT: "6333"
-      MINIO_ENDPOINT: minio:9000
-    volumes:
-      - kuzu_data:/data/kuzu_db
-
-  # ── Phase 3: Celery Beat ───────────────────────────────────
-  celery-beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        BASE_IMAGE: enterprise-kb/python-deps:3.11
-    container_name: kb-celery-beat
-    command: celery -A app.core.celery_app beat --loglevel=info
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    env_file: .env
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: "5432"
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/1
-      CELERY_RESULT_BACKEND: redis://redis:6379/2
-
-  # FastAPI 不在此编排，请在宿主机: uvicorn app.main:app --reload --port 8000
+  # FastAPI / Celery 不在此编排（避免构建 python-deps 镜像）。
+  # 宿主机: uvicorn app.main:app --reload --port 8000
+  # 需要异步文档处理时本机:
+  #   celery -A app.core.celery_app worker --loglevel=info --concurrency=2
+  # 需要每日 RAGAS 评估定时任务时本机:
+  #   celery -A app.core.celery_app beat --loglevel=info
+  # .env 中需将 POSTGRES_* / REDIS_* / QDRANT_* / MINIO_* 指向 localhost 与 compose 映射端口（如 PG 5433）。
 
 volumes:
   pgdata:
   qdrant_data:
   minio_data:
   redis_data:
-  kuzu_data:
