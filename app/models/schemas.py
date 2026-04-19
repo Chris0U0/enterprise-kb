@@ -293,6 +293,7 @@ class ProjectListItem(BaseModel):
     health: str  # good | warning | critical
     last_update_at: datetime | None
     pending_summary: str
+    my_role: str  # 当前用户在该项目中的角色：Admin | Editor | Viewer
 
 
 class ProjectListResponse(BaseModel):
@@ -326,6 +327,7 @@ class ProjectDetail(BaseModel):
     timeline: list[dict] = []
     last_report_excerpt: str | None = None
     onboarding: ProjectOnboarding
+    my_role: str  # 当前用户在该项目中的角色：Admin | Editor | Viewer
 
 
 class ProjectMemberItem(BaseModel):

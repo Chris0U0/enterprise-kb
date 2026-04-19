@@ -1,5 +1,5 @@
 /**
- * 与 FastAPI 后端通信：自动附加 Bearer、统一错误解析（与 app/core/errors 一致）。
+ * 与 FastAPI 后端通信：自动附加 Bearer、access 过期时 refresh 重试一次、统一错误解析。
  */
 import { apiV1 } from "@/lib/api";
 
@@ -38,9 +38,45 @@ function formatDetail(detail: unknown): string {
   return "请求失败";
 }
 
-export async function apiFetchJson<T>(
+function isAuthLoginUrl(url: string): boolean {
+  return url.includes("/auth/login");
+}
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    const rt = getRefreshToken();
+    if (!rt) return false;
+    try {
+      const res = await fetch(apiV1("/auth/refresh"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: rt }),
+      });
+      if (!res.ok) return false;
+      const data = (await res.json()) as {
+        access_token: string;
+        refresh_token?: string | null;
+      };
+      setTokens(data.access_token, data.refresh_token ?? undefined);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
+}
+
+async function doFetchJson<T>(
   path: string,
-  init?: RequestInit & { json?: unknown }
+  init: (RequestInit & { json?: unknown }) | undefined,
+  retriedAfterRefresh: boolean
 ): Promise<T> {
   const url = path.startsWith("http") ? path : apiV1(path);
   const headers = new Headers(init?.headers);
@@ -55,6 +91,14 @@ export async function apiFetchJson<T>(
   });
 
   if (res.status === 401) {
+    if (isAuthLoginUrl(url)) {
+      const err = (await res.json().catch(() => ({}))) as ApiErrorBody;
+      throw new Error(formatDetail(err.detail) || res.statusText);
+    }
+    if (!retriedAfterRefresh && getRefreshToken()) {
+      const ok = await refreshAccessToken();
+      if (ok) return doFetchJson<T>(path, init, true);
+    }
     clearTokens();
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
       window.location.href = "/login";
@@ -69,4 +113,11 @@ export async function apiFetchJson<T>(
 
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+export async function apiFetchJson<T>(
+  path: string,
+  init?: RequestInit & { json?: unknown }
+): Promise<T> {
+  return doFetchJson<T>(path, init, false);
 }

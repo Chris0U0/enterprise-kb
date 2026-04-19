@@ -1,6 +1,8 @@
 /**
  * 与后端 `ProjectDetail` / onboarding 字段语义对齐；不再维护本地 PROJECT_REGISTRY。
  */
+import type { ProjectRole } from "@/lib/project-permissions";
+
 export type ProjectOnboardingFlags = {
   hasUploadedDoc: boolean;
   hasIndexedKnowledge: boolean;
@@ -15,6 +17,8 @@ export type ProjectRecord = {
   description?: string | null;
   onboarding: ProjectOnboardingFlags;
   health?: { progress: number; risk: number; quality: number };
+  /** 当前用户在本项目中的角色（GET /projects/:id 的 my_role） */
+  myRole?: ProjectRole;
 };
 
 export function mapOnboardingFromApi(raw: {

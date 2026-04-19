@@ -7,6 +7,7 @@ import {
   mapOnboardingFromApi,
   type ProjectRecord,
 } from "@/data/project-registry";
+import { normalizeProjectRole } from "@/lib/project-permissions";
 
 type ProjectDetailApi = {
   id: string;
@@ -14,6 +15,7 @@ type ProjectDetailApi = {
   description?: string | null;
   phase: string;
   health: { progress: number; risk: number; quality: number };
+  my_role?: string;
   onboarding: {
     has_uploaded_doc: boolean;
     has_indexed_knowledge: boolean;
@@ -53,6 +55,7 @@ export function useProject(projectId: string | undefined): {
           description: d.description,
           health: d.health,
           onboarding: mapOnboardingFromApi(d.onboarding),
+          myRole: normalizeProjectRole(d.my_role),
         });
       } catch (e) {
         if (cancelled) return;

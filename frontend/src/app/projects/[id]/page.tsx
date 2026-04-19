@@ -7,7 +7,7 @@ import { useParams, usePathname } from "next/navigation";
 import { AppPage, PageHeader } from "@/components/shared/page-layout";
 import { ReadOnlyBanner } from "@/components/shared/page-gate";
 import { breadcrumbsFromPathname } from "@/lib/route-meta";
-import { useAuth } from "@/lib/auth-context";
+import { canEditInProject } from "@/lib/project-permissions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,13 +44,12 @@ export default function ProjectDashboardPage() {
   const params = useParams();
   const pathname = usePathname();
   const id = params.id as string;
-  const { user } = useAuth();
   const { project: meta, isLoading: projectLoading } = useProject(id);
   const { members: memberRows, loading: membersLoading } = useProjectMembers(id);
   const { docs: docRows, loading: docsLoading } = useProjectDocuments(id);
 
-  // 权限检查辅助函数
-  const canManage = user?.role === 'Admin' || user?.role === 'Editor';
+  const canManage = canEditInProject(meta?.myRole);
+  const projectViewer = meta?.myRole === "Viewer";
 
   if (projectLoading || !meta) {
     return (
@@ -93,7 +92,7 @@ export default function ProjectDashboardPage() {
 
   return (
     <AppPage surface="canvas">
-      {user?.role === "Viewer" ? (
+      {projectViewer ? (
         <ReadOnlyBanner className="mb-6" />
       ) : null}
 
@@ -102,7 +101,7 @@ export default function ProjectDashboardPage() {
           <span className="flex flex-wrap items-center gap-3">
             {project.name}
             <Badge variant="secondary" className="font-sans text-xs">
-              {user?.role === "Viewer" ? "只读模式" : "管理模式"}
+              {projectViewer ? "只读模式" : "管理模式"}
             </Badge>
           </span>
         }

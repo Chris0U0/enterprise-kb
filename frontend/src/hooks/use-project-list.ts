@@ -13,6 +13,8 @@ export type ProjectListItemApi = {
   health: string;
   last_update_at: string | null;
   pending_summary: string;
+  /** 当前用户在该项目中的角色 */
+  my_role?: string;
 };
 
 type ProjectListResponse = {

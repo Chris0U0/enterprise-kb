@@ -941,6 +941,8 @@ export interface components {
             /** Last Report Excerpt */
             last_report_excerpt?: string | null;
             onboarding: components["schemas"]["ProjectOnboarding"];
+            /** 当前用户在该项目中的角色 */
+            my_role: string;
         };
         /** ProjectHealthMetrics */
         ProjectHealthMetrics: {
@@ -980,6 +982,8 @@ export interface components {
             last_update_at: string | null;
             /** Pending Summary */
             pending_summary: string;
+            /** 当前用户在该项目中的角色 */
+            my_role: string;
         };
         /**
          * ProjectListResponse

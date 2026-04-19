@@ -202,7 +202,14 @@ export default function ProjectsListPage() {
                   <tr key={project.id} className="group hover:bg-muted/30 transition-colors">
                     <td className="px-6 py-5">
                       <Link href={`/projects/${project.id}`} className="group-hover:text-primary transition-colors">
-                        <p className="font-serif text-base font-bold italic leading-tight">{project.name}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-serif text-base font-bold italic leading-tight">{project.name}</p>
+                          {project.my_role ? (
+                            <Badge variant="outline" className="text-[10px] font-bold uppercase">
+                              {project.my_role}
+                            </Badge>
+                          ) : null}
+                        </div>
                         <p className="mt-1 line-clamp-1 font-sans text-[10px] font-normal italic text-muted-foreground">
                           {project.description || "—"}
                         </p>
@@ -255,9 +262,16 @@ function ProjectCard({ project }: { project: ProjectListItemApi }) {
     <Card className="paper-border group relative flex flex-col overflow-hidden bg-white transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl">
       <div className="absolute left-0 top-0 h-1 w-full bg-primary/10" />
       <CardHeader className="pb-2">
-        <div className="mb-4 flex items-start justify-between">
-          <HealthBadge status={project.health} />
-          <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/5 text-primary/40 transition-transform group-hover:scale-110">
+        <div className="mb-4 flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <HealthBadge status={project.health} />
+            {project.my_role ? (
+              <Badge variant="outline" className="text-[10px] font-bold uppercase">
+                {project.my_role}
+              </Badge>
+            ) : null}
+          </div>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-primary/5 text-primary/40 transition-transform group-hover:scale-110">
             <FolderKanban size={20} />
           </div>
         </div>

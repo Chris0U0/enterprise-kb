@@ -146,7 +146,7 @@ async def list_projects(
         .where(ProjectMember.user_id == user.id)
     )
     stmt = (
-        select(Project)
+        select(Project, ProjectMember.role)
         .join(ProjectMember, ProjectMember.project_id == Project.id)
         .where(ProjectMember.user_id == user.id)
     )
@@ -164,8 +164,8 @@ async def list_projects(
     # 分页：先取 id 再组装（数据量可控）
     offset = (page - 1) * page_size
     result = await db.execute(stmt.offset(offset).limit(page_size))
-    projects = result.scalars().unique().all()
-    ids = [p.id for p in projects]
+    rows = result.all()
+    ids = [p.id for p, _ in rows]
 
     mc = await _member_counts(db, ids)
     tc = await _doc_total_counts(db, ids)
@@ -174,7 +174,7 @@ async def list_projects(
     lu = await _doc_last_upload(db, ids)
 
     items: list[ProjectListItem] = []
-    for p in projects:
+    for p, member_role in rows:
         total = tc.get(p.id, 0)
         failed = fc.get(p.id, 0)
         completed = cc.get(p.id, 0)
@@ -191,6 +191,7 @@ async def list_projects(
                 health=_health_from_counts(total, failed, completed),
                 last_update_at=last_update,
                 pending_summary=_pending_summary_placeholder(),
+                my_role=_display_role(member_role),
             )
         )
     return ProjectListResponse(
@@ -224,10 +225,10 @@ async def create_project(
     )
     db.add(member)
     await db.flush()
-    return await _project_to_detail(db, proj)
+    return await _project_to_detail(db, proj, "Admin")
 
 
-async def _project_to_detail(db: AsyncSession, p: Project) -> ProjectDetail:
+async def _project_to_detail(db: AsyncSession, p: Project, my_role: str) -> ProjectDetail:
     pid = p.id
     mc = await _member_counts(db, [pid])
     tc = await _doc_total_counts(db, [pid])
@@ -250,6 +251,7 @@ async def _project_to_detail(db: AsyncSession, p: Project) -> ProjectDetail:
         timeline=[],
         last_report_excerpt=None,
         onboarding=onboarding,
+        my_role=my_role,
     )
 
 
@@ -283,23 +285,25 @@ async def _compute_onboarding(
 @router.get("/{project_id}", response_model=ProjectDetail)
 async def get_project(
     project_id: uuid.UUID,
-    _: tuple = Depends(require_project_member),
+    ctx: tuple[User, str] = Depends(require_project_member),
     db: AsyncSession = Depends(get_db),
 ):
+    _, role = ctx
     result = await db.execute(select(Project).where(Project.id == project_id))
     p = result.scalar_one_or_none()
     if p is None:
         raise HTTPException(status_code=404, detail="项目不存在")
-    return await _project_to_detail(db, p)
+    return await _project_to_detail(db, p, _display_role(role))
 
 
 @router.patch("/{project_id}", response_model=ProjectDetail)
 async def update_project(
     project_id: uuid.UUID,
     body: ProjectUpdate,
-    _: tuple = Depends(require_project_editor),
+    ctx: tuple[User, str] = Depends(require_project_editor),
     db: AsyncSession = Depends(get_db),
 ):
+    _, role = ctx
     result = await db.execute(select(Project).where(Project.id == project_id))
     p = result.scalar_one_or_none()
     if p is None:
@@ -311,7 +315,7 @@ async def update_project(
     if body.stage is not None:
         p.stage = body.stage.strip()
     await db.flush()
-    return await _project_to_detail(db, p)
+    return await _project_to_detail(db, p, _display_role(role))
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
