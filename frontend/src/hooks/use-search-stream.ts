@@ -141,10 +141,15 @@ export function useSearchStream() {
       citations.map((c, idx) => {
         const suffix = c.page_num ? ` · 第${c.page_num}页` : "";
         const section = c.section_title ?? c.section_path ?? "";
+        const params = new URLSearchParams({
+          ...(c.doc_id ? { docId: c.doc_id } : {}),
+          ...(c.section_path ? { sectionPath: c.section_path } : {}),
+          ...(typeof c.page_num === "number" ? { pageNum: String(c.page_num) } : {}),
+        });
         return {
           id: `${c.doc_id ?? "doc"}-${idx}`,
           label: `${c.doc_name ?? "未知文档"}${section ? ` · ${section}` : ""}${suffix}`,
-          href: "/knowledge",
+          href: params.toString() ? `/knowledge?${params.toString()}` : "/knowledge",
         };
       }),
     [citations]

@@ -11,6 +11,7 @@ import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
@@ -33,10 +34,21 @@ import {
 type UploadResp = {
   doc_id: string;
 };
+type MarkdownResp = {
+  doc_id: string;
+  markdown: string;
+};
+type SourceResp = {
+  doc_id: string;
+  source_url: string;
+  original_filename: string;
+  source_format: string;
+};
 
 export default function KnowledgeBasePage() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId");
+  const docIdFromQuery = searchParams.get("docId");
   const { project: projectCtx } = useProject(projectId ?? undefined);
   const { docs, loading, refetch } = useProjectDocuments(projectId ?? undefined);
 
@@ -44,7 +56,14 @@ export default function KnowledgeBasePage() {
   const [activeDoc, setActiveDoc] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [previewMarkdown, setPreviewMarkdown] = useState<string>("");
+  const [previewSourceUrl, setPreviewSourceUrl] = useState<string>("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<"markdown" | "source">("markdown");
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const unchangedRoundsRef = useRef(0);
+  const lastStatusesRef = useRef<string>("");
 
   const documents = useMemo(
     () =>
@@ -63,10 +82,84 @@ export default function KnowledgeBasePage() {
     const hasRunning = docs.some((d) => d.conversion_status === "pending" || d.conversion_status === "processing");
     if (!hasRunning) return;
     const timer = window.setInterval(() => {
+      const signature = docs.map((d) => `${d.id}:${d.conversion_status}`).join("|");
+      if (signature === lastStatusesRef.current) {
+        unchangedRoundsRef.current += 1;
+      } else {
+        unchangedRoundsRef.current = 0;
+        lastStatusesRef.current = signature;
+      }
+      // 超过 5 轮无变化时降频，避免无效轮询刷日志
+      if (unchangedRoundsRef.current >= 5 && unchangedRoundsRef.current % 2 === 1) {
+        return;
+      }
       refetch();
     }, 3000);
     return () => window.clearInterval(timer);
   }, [docs, refetch]);
+
+  useEffect(() => {
+    if (!docIdFromQuery) return;
+    const exists = documents.some((d) => d.id === docIdFromQuery);
+    if (exists) setActiveDoc(docIdFromQuery);
+  }, [docIdFromQuery, documents]);
+
+  useEffect(() => {
+    if (!activeDoc && documents.length > 0) {
+      setActiveDoc(documents[0].id);
+    }
+  }, [activeDoc, documents]);
+
+  const selectedDoc = useMemo(
+    () => documents.find((d) => d.id === activeDoc) ?? null,
+    [documents, activeDoc]
+  );
+
+  useEffect(() => {
+    if (!activeDoc || !selectedDoc) {
+      setPreviewMarkdown("");
+      setPreviewSourceUrl("");
+      setPreviewError(null);
+      return;
+    }
+    if (previewMode === "markdown" && selectedDoc.status !== "completed") {
+      setPreviewMarkdown("");
+      setPreviewSourceUrl("");
+      setPreviewError("文档尚未完成解析，暂时无法预览。");
+      return;
+    }
+    let cancelled = false;
+    setPreviewLoading(true);
+    setPreviewError(null);
+    void (async () => {
+      try {
+        if (previewMode === "markdown") {
+          const data = await apiFetchJson<MarkdownResp>(`/documents/${activeDoc}/markdown`);
+          if (!cancelled) {
+            setPreviewMarkdown(data.markdown || "");
+            setPreviewSourceUrl("");
+          }
+        } else {
+          const data = await apiFetchJson<SourceResp>(`/documents/${activeDoc}/source_url`);
+          if (!cancelled) {
+            setPreviewSourceUrl(data.source_url || "");
+            setPreviewMarkdown("");
+          }
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setPreviewMarkdown("");
+          setPreviewSourceUrl("");
+          setPreviewError(e instanceof Error ? e.message : "加载预览失败");
+        }
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDoc, selectedDoc, previewMode]);
 
   const handleUpload = async (file: File | null) => {
     if (!file || !projectId) return;
@@ -269,32 +362,62 @@ export default function KnowledgeBasePage() {
                 <CardHeader>
                   <CardTitle className="text-lg font-serif italic flex items-center gap-2">
                     <ListTree size={18} className="text-primary" />
-                    文档结构预览
+                    文档内容预览
                   </CardTitle>
                   <CardDescription className="text-xs">
                     {activeDoc ? `解析自: ${documents.find((d) => d.id === activeDoc)?.name}` : "请从左侧选择一个文档"}
                   </CardDescription>
+                  <Tabs
+                    value={previewMode}
+                    onValueChange={(v) => setPreviewMode(v as "markdown" | "source")}
+                    className="w-fit"
+                  >
+                    <TabsList className="h-8">
+                      <TabsTrigger value="markdown" className="text-xs">
+                        Markdown
+                      </TabsTrigger>
+                      <TabsTrigger value="source" className="text-xs">
+                        源文件
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 </CardHeader>
                 <CardContent>
                   {activeDoc ? (
                     <ScrollArea className="h-[400px]">
-                      <div className="space-y-1 font-sans text-sm">
-                        <OutlineItem level={0} label="1. 项目背景" />
-                        <OutlineItem level={1} label="1.1 系统目标" />
-                        <OutlineItem level={1} label="1.2 适用范围" />
-                        <OutlineItem level={0} label="2. 技术架构" />
-                        <OutlineItem level={1} label="2.1 后端服务" active />
-                        <OutlineItem level={2} label="2.1.1 Celery 异步队列" />
-                        <OutlineItem level={2} label="2.1.2 Redis 缓存" />
-                        <OutlineItem level={1} label="2.2 前端展现" />
-                        <OutlineItem level={0} label="3. 安全合规" />
-                        <OutlineItem level={1} label="3.1 MD5 防篡改" />
-                      </div>
+                      {previewLoading ? (
+                        <div className="flex h-[340px] items-center justify-center text-sm text-muted-foreground">
+                          正在加载文档预览...
+                        </div>
+                      ) : previewError ? (
+                        <div className="rounded-sm border border-border bg-background p-3 text-xs text-muted-foreground">
+                          {previewError}
+                        </div>
+                      ) : previewMode === "source" ? (
+                        <div className="space-y-3 rounded-sm border border-border bg-background p-3">
+                          <p className="text-xs text-muted-foreground">
+                            源文件通过 MinIO 预签名链接访问（1 小时有效）。
+                          </p>
+                          {previewSourceUrl ? (
+                            <Button asChild size="sm" className="h-8">
+                              <a href={previewSourceUrl} target="_blank" rel="noreferrer">
+                                打开源文件
+                              </a>
+                            </Button>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">暂无可用源文件链接。</p>
+                          )}
+                        </div>
+                      ) : (
+                        <pre className="whitespace-pre-wrap break-words rounded-sm border border-border bg-background p-3 text-xs leading-relaxed">
+                          {previewMarkdown || "该文档暂无可预览内容。"}
+                        </pre>
+                      )}
                     </ScrollArea>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground opacity-50 space-y-4">
                       <FileText size={48} />
-                      <p className="text-sm italic font-serif">选择文档后自动调用 mcp/get_outline</p>
+                      <p className="text-sm italic font-serif">选择文档后自动加载 Markdown 预览</p>
                     </div>
                   )}
                 </CardContent>
@@ -345,19 +468,3 @@ function StatusIndicator({ status, inline = false }: { status: string, inline?: 
   );
 }
 
-function OutlineItem({ level, label, active = false }: { level: number, label: string, active?: boolean }) {
-  return (
-    <div 
-      className={cn(
-        "flex items-center gap-2 py-1.5 px-3 rounded-sm cursor-pointer transition-colors",
-        level === 0 ? "font-bold text-foreground" : "text-muted-foreground hover:text-foreground",
-        active ? "bg-primary text-primary-foreground font-bold shadow-sm" : "hover:bg-muted/50"
-      )}
-      style={{ paddingLeft: `${(level + 1) * 12}px` }}
-    >
-      {level > 0 && <div className="w-1 h-1 rounded-full bg-current opacity-30" />}
-      <span className="truncate">{label}</span>
-      {active && <ChevronRight size={12} className="ml-auto" />}
-    </div>
-  );
-}

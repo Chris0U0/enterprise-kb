@@ -309,6 +309,33 @@ async def get_document_markdown(
     return {"doc_id": str(doc_id), "markdown": md_content}
 
 
+@router.get("/{doc_id}/source_url")
+async def get_document_source_url(
+    doc_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取源文件预签名下载链接（默认 1 小时有效）"""
+    result = await db.execute(select(Document).where(Document.id == doc_id))
+    doc = result.scalar_one_or_none()
+    if doc is None:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    await ensure_project_member(doc.project_id, user, db)
+    if not doc.source_path:
+        raise HTTPException(status_code=400, detail="源文件路径不存在")
+
+    from app.core.minio_client import get_minio
+
+    minio = get_minio()
+    url = minio.presigned_url(doc.source_path, expires_hours=1)
+    return {
+        "doc_id": str(doc_id),
+        "source_url": url,
+        "original_filename": doc.original_filename,
+        "source_format": doc.source_format,
+    }
+
+
 @router.delete("/{doc_id}")
 async def delete_document(
     doc_id: uuid.UUID,

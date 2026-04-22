@@ -27,6 +27,9 @@ export function CitationList({
       <ul className="space-y-1.5 text-xs">
         {items.map((c) => (
           <li key={c.id}>
+            {/*
+              若 href 已包含查询参数（如 docId/sectionPath），保留原参数并追加 projectId 上下文。
+            */}
             <Link
               href={c.href.startsWith("http") ? c.href : withProjectQuery(c.href, projectId)}
               className="text-primary underline-offset-2 hover:underline"

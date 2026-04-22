@@ -5,9 +5,13 @@ export function withProjectQuery(
   projectId: string,
   extra?: Record<string, string>
 ): string {
-  const qs = new URLSearchParams({ projectId, ...extra });
+  const init: Record<string, string> = { ...(extra ?? {}) };
+  if (projectId) init.projectId = projectId;
+  const qs = new URLSearchParams(init);
   const sep = basePath.includes("?") ? "&" : "?";
-  return `${basePath}${sep}${qs.toString()}`;
+  const s = qs.toString();
+  if (!s) return basePath;
+  return `${basePath}${sep}${s}`;
 }
 
 export function projectPath(projectId: string, segment: string): string {
