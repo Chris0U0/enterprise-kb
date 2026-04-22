@@ -204,11 +204,15 @@ async def process_document(
                 from app.services.graph.extractor import batch_extract
                 from app.services.graph.store import get_graph_store
 
-                entities, relations = await batch_extract(sections, str(doc_id))
+                store = get_graph_store()
+                # 尝试获取该项目已有的本体（如果已有文档，则复用本体，保证一致性）
+                project_schema = store.get_project_schema(project_id_str)
+                schema = project_schema if project_schema["entities"] else None
+
+                entities, relations = await batch_extract(sections, doc_id_str, schema=schema)
                 if entities or relations:
-                    store = get_graph_store()
-                    store.add_entities(entities, str(project_id))
-                    store.add_relations(relations, str(project_id))
+                    store.add_entities(entities, project_id_str)
+                    store.add_relations(relations, project_id_str)
                     logger.info(f"GraphRAG: {len(entities)} 实体, {len(relations)} 关系 (doc: {filename})")
             except Exception as e:
                 logger.warning(f"GraphRAG 抽取跳过: {e}")

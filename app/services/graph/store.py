@@ -150,7 +150,27 @@ class GraphStore:
             "MATCH (n:Entity) WHERE n.project_id = $pid "
             "RETURN n.type AS type, COUNT(*) AS count ORDER BY count DESC"
         )
-        return self.query_cypher(cypher, {"pid": project_id})
+        results = self.query_cypher(cypher, {"pid": project_id})
+        return [{"type": r[0], "count": r[1]} for r in results]
+
+    def get_relation_types(self, project_id: str) -> list[dict]:
+        """获取项目中所有关系类型及数量"""
+        # 注意：Kuzu 的 REL TABLE 查询语法可能略有不同，这里使用通配关系
+        cypher = (
+            "MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.project_id = $pid "
+            "RETURN r.relation_type AS type, COUNT(*) AS count ORDER BY count DESC"
+        )
+        results = self.query_cypher(cypher, {"pid": project_id})
+        return [{"type": r[0], "count": r[1]} for r in results]
+
+    def get_project_schema(self, project_id: str) -> dict:
+        """获取项目的完整本体 Schema"""
+        ent_types = self.get_entity_types(project_id)
+        rel_types = self.get_relation_types(project_id)
+        return {
+            "entities": [t["type"] for t in ent_types],
+            "relations": [t["type"] for t in rel_types],
+        }
 
     def delete_by_project(self, project_id: str):
         """删除项目的全部图数据"""

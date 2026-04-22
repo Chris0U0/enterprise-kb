@@ -156,6 +156,41 @@ async def compare_runs(
     }
 
 
+@router.get("/logs")
+async def get_audit_logs(
+    limit: int = Query(default=50, ge=1, le=500),
+    event_type: str | None = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取全量审计日志 (Admin Only)"""
+    _require_admin(user)
+    
+    conditions = []
+    if event_type:
+        conditions.append(AuditLog.event_type == event_type)
+        
+    query = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
+    if conditions:
+        query = query.where(and_(*conditions))
+        
+    result = await db.execute(query)
+    logs = result.scalars().all()
+    
+    return [
+        {
+            "id": str(log.id),
+            "event_type": log.event_type,
+            "user_id": str(log.user_id) if log.user_id else "system",
+            "project_id": str(log.project_id) if log.project_id else None,
+            "payload": log.payload,
+            "created_at": log.created_at.isoformat() if log.created_at else "",
+            "ip_address": log.ip_address,
+        }
+        for log in logs
+    ]
+
+
 def _check_enabled():
     if not getattr(settings, "RAGAS_ENABLED", False):
         raise HTTPException(status_code=400, detail="RAGAS 评估未启用，请设置 RAGAS_ENABLED=true")
