@@ -151,3 +151,31 @@ class TermGlossary(Base):
     synonyms = Column(ARRAY(Text), default=[])
     aliases = Column(ARRAY(Text), default=[])
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class ChatSession(Base):
+    """问答会话表，用于追溯和继续对话"""
+    __tablename__ = "chat_sessions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+
+
+class ChatMessage(Base):
+    """会话中的每一条消息（提问或回答）"""
+    __tablename__ = "chat_messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String(20), nullable=False)  # user / assistant
+    content = Column(Text, nullable=False)
+    citations = Column(JSONB)  # 存储该消息关联的引用来源
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    session = relationship("ChatSession", back_populates="messages")

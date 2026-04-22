@@ -69,17 +69,19 @@ async def complete_chat_with_usage(
     prompt: str,
     *,
     system: str | None = None,
+    history: list[dict[str, str]] | None = None,
     max_tokens: int = 2048,
 ) -> tuple[str, int]:
     """
     非流式补全，返回 (文本, token 用量合计)。
-    OpenAI 兼容路径使用 API 返回的 total_tokens；Anthropic 为 input+output。
     """
     if is_openai_compat_provider():
         client = _openai_client()
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
+        if history:
+            messages.extend(history)
         messages.append({"role": "user", "content": prompt})
         resp = await client.chat.completions.create(
             model=settings.OPENAI_MODEL,
@@ -92,10 +94,15 @@ async def complete_chat_with_usage(
         return text, total
 
     client = _anthropic_client()
+    messages_anthropic = []
+    if history:
+        messages_anthropic.extend(history)
+    messages_anthropic.append({"role": "user", "content": prompt})
+    
     kwargs: dict = {
         "model": settings.ANTHROPIC_MODEL,
         "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages_anthropic,
     }
     if system:
         kwargs["system"] = system
@@ -110,6 +117,7 @@ async def stream_chat_chunks(
     prompt: str,
     *,
     system: str | None = None,
+    history: list[dict[str, str]] | None = None,
     max_tokens: int = 2048,
 ) -> AsyncGenerator[str, None]:
     """流式输出文本增量（纯文本 token）。"""
@@ -118,6 +126,8 @@ async def stream_chat_chunks(
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
+        if history:
+            messages.extend(history)
         messages.append({"role": "user", "content": prompt})
         stream = await client.chat.completions.create(
             model=settings.OPENAI_MODEL,
@@ -134,10 +144,15 @@ async def stream_chat_chunks(
         return
 
     client = _anthropic_client()
+    messages_anthropic = []
+    if history:
+        messages_anthropic.extend(history)
+    messages_anthropic.append({"role": "user", "content": prompt})
+    
     kwargs: dict = {
         "model": settings.ANTHROPIC_MODEL,
         "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages_anthropic,
     }
     if system:
         kwargs["system"] = system

@@ -57,11 +57,12 @@ class AgenticTrace:
 
 
 class AgenticState(TypedDict):
-    """LangGraph 状态定义"""
+    """LangGraph 状态定义精品版"""
     # 输入
     original_query: str
     project_id: str
     top_k: int
+    chat_history: list[dict] | None  # 新增：多轮对话历史
 
     # 计划
     plan: list[dict]             # PlanStep 序列化列表

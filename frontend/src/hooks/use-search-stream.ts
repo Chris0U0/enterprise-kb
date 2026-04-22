@@ -50,9 +50,10 @@ export function useSearchStream() {
   const [steps, setSteps] = useState<StreamStep[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [citations, setCitations] = useState<CitationEvent[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const reset = useCallback(() => {
+  const reset = useCallback((clearSession = true) => {
     abortRef.current?.abort();
     abortRef.current = null;
     setRunning(false);
@@ -60,9 +61,10 @@ export function useSearchStream() {
     setSteps([]);
     setError(null);
     setCitations([]);
+    if (clearSession) setSessionId(null);
   }, []);
 
-  const start = useCallback(async (query: string, projectId: string, topK = 5) => {
+  const start = useCallback(async (query: string, projectId: string, topK = 5, useCurrentSession = true) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -71,6 +73,11 @@ export function useSearchStream() {
     setSteps([]);
     setError(null);
     setCitations([]);
+    
+    // 如果不使用当前会话，则清空 sessionId
+    if (!useCurrentSession) {
+      setSessionId(null);
+    }
 
     try {
       const token = getAccessToken();
@@ -79,6 +86,11 @@ export function useSearchStream() {
       url.searchParams.set("query", query);
       url.searchParams.set("project_id", projectId);
       url.searchParams.set("top_k", String(topK));
+      
+      // 如果存在 sessionId 且要求使用，则带上
+      if (useCurrentSession && sessionId) {
+        url.searchParams.set("session_id", sessionId);
+      }
 
       const res = await fetch(url.toString(), {
         method: "GET",
@@ -112,17 +124,23 @@ export function useSearchStream() {
           }
           if (!type || !dataText) continue;
 
-          const data = JSON.parse(dataText) as Record<string, unknown>;
-          if (type === "step" && typeof data.phase === "string") {
-            setSteps((prev) => upsertStep(prev, data.phase as string));
-          } else if (type === "chunk" && typeof data.text === "string") {
-            setAnswer((prev) => prev + (data.text as string));
-          } else if (type === "citation") {
-            setCitations((prev) => [...prev, data as CitationEvent]);
-          } else if (type === "error") {
-            setError(typeof data.message === "string" ? data.message : "流式检索失败");
-          } else if (type === "done") {
-            setSteps((prev) => prev.map((s) => ({ ...s, status: "done" })));
+          try {
+            const data = JSON.parse(dataText) as Record<string, unknown>;
+            if (type === "session_id" && typeof data.id === "string") {
+              setSessionId(data.id);
+            } else if (type === "step" && typeof data.phase === "string") {
+              setSteps((prev) => upsertStep(prev, data.phase as string));
+            } else if (type === "chunk" && typeof data.text === "string") {
+              setAnswer((prev) => prev + (data.text as string));
+            } else if (type === "citation") {
+              setCitations((prev) => [...prev, data as CitationEvent]);
+            } else if (type === "error") {
+              setError(typeof data.message === "string" ? data.message : "流式检索失败");
+            } else if (type === "done") {
+              setSteps((prev) => prev.map((s) => ({ ...s, status: "done" })));
+            }
+          } catch (err) {
+            console.error("Parse SSE data error:", err, dataText);
           }
         }
       }
@@ -134,7 +152,7 @@ export function useSearchStream() {
         setRunning(false);
       }
     }
-  }, []);
+  }, [sessionId]); // 依赖 sessionId 以确保 start 函数能获取到最新的会话 ID
 
   const citationLabels = useMemo(
     () =>
@@ -155,6 +173,6 @@ export function useSearchStream() {
     [citations]
   );
 
-  return { running, answer, steps, error, start, reset, citationLabels };
+  return { running, answer, steps, error, start, reset, citationLabels, sessionId, setSessionId, citations };
 }
 

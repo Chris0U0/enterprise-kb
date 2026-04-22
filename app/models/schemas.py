@@ -83,6 +83,7 @@ class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
     project_id: uuid.UUID
     top_k: int = Field(default=5, ge=1, le=20)
+    session_id: uuid.UUID | None = None  # 支持会话历史追溯
 
 
 class CitationSource(BaseModel):

@@ -132,19 +132,12 @@ async def search_stream(
     query: str = Query(..., min_length=1, max_length=2000),
     project_id: uuid.UUID = Query(...),
     top_k: int = Query(default=5, ge=1, le=20),
+    session_id: uuid.UUID | None = Query(default=None), # 新增 session_id 支持
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     SSE 流式检索 — 实时推送检索过程和答案
-
-    事件类型:
-      - step:     进度状态更新
-      - thinking: Agentic RAG 推理思考过程
-      - chunk:    LLM 生成的文本增量
-      - citation: 引用来源信息
-      - done:     完成信号 + 统计信息
-      - error:    错误信息
     """
     await ensure_project_member(project_id, user, db)
     project_id_str = str(project_id)
@@ -155,9 +148,23 @@ async def search_stream(
     from app.services.streaming.sse import stream_agentic_rag, stream_search_response
 
     if strategy == RetrievalStrategy.AGENTIC_RAG:
-        generator = stream_agentic_rag(query, project_id_str, top_k)
+        generator = stream_agentic_rag(
+            query=query, 
+            project_id=project_id_str, 
+            user_id=user.id,
+            db=db,
+            session_id=session_id,
+            top_k=top_k
+        )
     else:
-        generator = stream_search_response(query, project_id_str, top_k)
+        generator = stream_search_response(
+            query=query, 
+            project_id=project_id_str, 
+            user_id=user.id,
+            db=db,
+            session_id=session_id,
+            top_k=top_k
+        )
 
     return StreamingResponse(
         generator,

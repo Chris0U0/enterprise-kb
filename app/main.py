@@ -22,6 +22,7 @@ from app.api.evaluation import router as evaluation_router
 from app.api.auth import router as auth_router
 from app.api.projects import router as projects_router
 from app.api.qa import router as qa_router
+from app.api.chat import router as chat_router  # 导入新路由
 
 settings = get_settings()
 
@@ -146,6 +147,7 @@ app.include_router(evaluation_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(qa_router, prefix="/api/v1")
+app.include_router(chat_router, prefix="/api/v1")  # 注册新路由
 
 
 @app.get("/")
