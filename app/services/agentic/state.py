@@ -15,12 +15,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, TypedDict
+from app.core.config import get_settings
+
+settings = get_settings()
 
 # ── 安全限制常量 ──────────────────────────────────────────
-MAX_STEPS = 4
-MAX_LLM_CALLS = 8
-TIMEOUT_SECONDS = 30
-MIN_CONFIDENCE = 0.6
+MAX_STEPS = settings.AGENTIC_MAX_STEPS
+MAX_LLM_CALLS = settings.AGENTIC_MAX_LLM_CALLS
+TIMEOUT_SECONDS = settings.AGENTIC_TIMEOUT_SECONDS
+MIN_CONFIDENCE = settings.AGENTIC_MIN_CONFIDENCE
 
 
 class StepStatus(str, Enum):

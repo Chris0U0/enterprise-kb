@@ -86,6 +86,8 @@ class Settings(BaseSettings):
     OPENAI_VISION_MODEL: str = "qwen-vl-plus"
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-20250514"
+    LLM_TIMEOUT: int = 60
+    LLM_MAX_RETRIES: int = 3
 
     # ── Embedding & Reranker ─────────────────────────────
     BGE_M3_MODEL_PATH: str = "BAAI/bge-m3"

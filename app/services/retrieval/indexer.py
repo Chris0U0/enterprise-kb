@@ -94,7 +94,7 @@ class VectorIndexer:
                 "page_num": sec.get("page_num"),
                 "sheet_name": sec.get("sheet_name"),
                 "timestamp_sec": sec.get("timestamp_sec"),
-                "content_snippet": (sec.get("content", ""))[:300],
+                "content_snippet": sec.get("content", ""), # 不再截断，存储完整片段内容以供 Reranker 精排
                 "checksum": checksum,
                 "upload_by": upload_by,
             }

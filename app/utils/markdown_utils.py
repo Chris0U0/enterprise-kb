@@ -121,6 +121,38 @@ def extract_sections(md_text: str) -> list[dict]:
 
     flush_section()
 
+    # ──────── 新增：长章节二次切分逻辑 ────────
+    MAX_CHUNK_SIZE = 800  # 单个片段最大字符数
+    CHUNK_OVERLAP = 150   # 重叠字符数
+    
+    split_sections = []
+    for sec in sections:
+        content = sec["content"]
+        if len(content) <= MAX_CHUNK_SIZE:
+            split_sections.append(sec)
+            continue
+        
+        # 按段落或长度切分
+        import textwrap
+        chunks = []
+        start = 0
+        while start < len(content):
+            end = start + MAX_CHUNK_SIZE
+            chunk = content[start:end]
+            chunks.append(chunk)
+            start += (MAX_CHUNK_SIZE - CHUNK_OVERLAP)
+            
+        for i, chunk in enumerate(chunks):
+            new_sec = sec.copy()
+            new_sec["content"] = chunk
+            new_sec["section_path"] = f"{sec['section_path']} (Part {i+1})"
+            new_sec["order_idx"] = sec["order_idx"] * 100 + i # 保证排序
+            new_sec["char_count"] = len(chunk)
+            split_sections.append(new_sec)
+    
+    sections = split_sections
+    # ────────────────────────────────────────
+
     # 如果没有任何标题，整个文档作为一个 section
     if not sections and body.strip():
         sections.append({

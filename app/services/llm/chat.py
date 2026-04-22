@@ -9,12 +9,16 @@
 from __future__ import annotations
 
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# 单例客户端缓存
+_openai_async_client: Optional["AsyncOpenAI"] = None
+_anthropic_async_client: Optional["anthropic.AsyncAnthropic"] = None
 
 try:
     import anthropic
@@ -23,8 +27,10 @@ except ImportError:
 
 try:
     from openai import AsyncOpenAI
+    import httpx
 except ImportError:
     AsyncOpenAI = None  # type: ignore[misc, assignment]
+    httpx = None
 
 
 def is_openai_compat_provider() -> bool:
@@ -39,20 +45,57 @@ def llm_configured_for_vision() -> bool:
 
 
 def _anthropic_client():
+    global _anthropic_async_client
     if anthropic is None:
         raise RuntimeError("未安装 anthropic，请: pip install anthropic")
     if not (settings.ANTHROPIC_API_KEY or "").strip():
         raise RuntimeError("未配置 ANTHROPIC_API_KEY")
-    return anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+    
+    if _anthropic_async_client is None:
+        _anthropic_async_client = anthropic.AsyncAnthropic(
+            api_key=settings.ANTHROPIC_API_KEY,
+            timeout=float(settings.LLM_TIMEOUT)
+        )
+    return _anthropic_async_client
 
 
 def _openai_client() -> "AsyncOpenAI":
+    global _openai_async_client
     if AsyncOpenAI is None:
         raise RuntimeError("未安装 openai，请: pip install openai")
     if not (settings.OPENAI_API_KEY or "").strip():
         raise RuntimeError("未配置 OPENAI_API_KEY（阿里云 DashScope API Key）")
-    base = (settings.OPENAI_BASE_URL or "").strip() or "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    return AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=base)
+    
+    if _openai_async_client is None:
+        base = (settings.OPENAI_BASE_URL or "").strip() or "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        
+        # 强制使用 IPv4 传输，避免 Windows IPv6 握手超时
+        # 显式禁用代理，并优化 TLS 握手设置
+        transport = httpx.AsyncHTTPTransport(
+            retries=3,
+            verify=True,
+            trust_env=False,
+            local_address="0.0.0.0" # 强制 IPv4
+        )
+        
+        http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(float(settings.LLM_TIMEOUT), connect=15.0, read=60.0, write=10.0, pool=10.0),
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+            transport=transport,
+            trust_env=False,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Connection": "keep-alive"
+            }
+        )
+        
+        _openai_async_client = AsyncOpenAI(
+            api_key=settings.OPENAI_API_KEY, 
+            base_url=base,
+            http_client=http_client,
+            max_retries=settings.LLM_MAX_RETRIES
+        )
+    return _openai_async_client
 
 
 async def complete_chat(

@@ -160,41 +160,39 @@ export default function CopilotPage() {
         breadcrumbs={breadcrumbsFromPathname("/copilot")}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <div 
-              onMouseEnter={() => setDropdownOpen(true)}
-              onMouseLeave={() => setDropdownOpen(false)}
-            >
-              <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" size="sm" className="gap-2 font-sans transition-all hover:bg-secondary/80">
-                    项目: {meta?.name ?? "加载中..."}
-                    <ChevronDown size={14} className={cn("opacity-50 transition-transform", dropdownOpen ? "rotate-180" : "")} />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64" onMouseEnter={() => setDropdownOpen(true)}>
-                  <DropdownMenuLabel className="flex items-center justify-between">
-                    切换知识库项目
-                    <Badge variant="outline" className="text-[10px] font-normal">{projectList.length}</Badge>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <ScrollArea className="h-[300px]">
-                    {projectList.map((p) => (
-                      <DropdownMenuItem 
-                        key={p.id} 
-                        onClick={() => handleSwitchProject(p.id)}
-                        className={cn(
-                          "flex flex-col items-start gap-1 py-3 cursor-pointer mx-1 my-0.5 rounded-sm",
-                          resolvedProjectId === p.id ? "bg-primary/10 text-primary border-l-2 border-primary" : ""
-                        )}
-                      >
-                        <span className="font-semibold text-sm">{p.name}</span>
-                        <span className="text-[10px] text-muted-foreground line-clamp-1">{p.description || "暂无描述"}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </ScrollArea>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="sm" className="gap-2 font-sans transition-all hover:bg-secondary/80">
+                  项目: {meta?.name ?? "加载中..."}
+                  <ChevronDown size={14} className={cn("opacity-50 transition-transform", dropdownOpen ? "rotate-180" : "")} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent 
+                align="end" 
+                className="w-64" 
+              >
+                <DropdownMenuLabel className="flex items-center justify-between">
+                  切换知识库项目
+                  <Badge variant="outline" className="text-[10px] font-normal">{projectList.length}</Badge>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <ScrollArea className="h-[300px]">
+                  {projectList.map((p) => (
+                    <DropdownMenuItem 
+                      key={p.id} 
+                      onClick={() => handleSwitchProject(p.id)}
+                      className={cn(
+                        "flex flex-col items-start gap-1 py-3 cursor-pointer mx-1 my-0.5 rounded-sm",
+                        resolvedProjectId === p.id ? "bg-primary/10 text-primary border-l-2 border-primary" : ""
+                      )}
+                    >
+                      <span className="font-semibold text-sm">{p.name}</span>
+                      <span className="text-[10px] text-muted-foreground line-clamp-1">{p.description || "暂无描述"}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </ScrollArea>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <div className="hidden sm:flex items-center gap-2">
               <Badge variant="outline" className="border-border bg-white/50 font-sans h-8 px-3">

@@ -27,7 +27,6 @@ const navItems = [
   { href: '/', label: '全局工作台', icon: Home },
   { href: '/projects', label: '项目管理', icon: FolderKanban },
   { href: '/copilot', label: 'AI 研读室', icon: BookOpen },
-  { href: '/knowledge', label: '知识库管理', icon: Library },
   { href: '/graph', label: '图谱探索', icon: Network },
   { href: '/report', label: '报告中心', icon: FileText },
   { href: '/admin', label: '系统设置', icon: Settings },

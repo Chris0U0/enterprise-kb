@@ -87,8 +87,8 @@ async def stream_llm_response(
             yield _sse_event("chunk", {"text": text})
 
     except Exception as e:
-        logger.error(f"流式 LLM 调用失败: {e}")
-        yield _sse_event("error", {"message": str(e)})
+        logger.exception(f"流式 LLM 调用失败")
+        yield _sse_event("error", {"message": f"连接模型失败: {str(e)}"})
 
 
 # ══════════════════════════════════════════════════════════
