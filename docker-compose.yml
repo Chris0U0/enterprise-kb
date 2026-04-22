@@ -58,6 +58,14 @@ services:
       timeout: 3s
       retries: 5
 
+  # ── Gotenberg 8 (Office 转 PDF 微服务) ────────────────────────
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: kb-gotenberg
+    ports:
+      - "3005:3000"  # 外部映射为 3005，避免与前端 3000 冲突
+    restart: always
+
   # FastAPI / Celery 不在此编排（避免构建 python-deps 镜像）。
   # 宿主机: uvicorn app.main:app --reload --port 8000
   # 需要异步文档处理时本机:

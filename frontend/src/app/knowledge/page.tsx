@@ -5,7 +5,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AppPage, PageHeader, PageToolbar } from "@/components/shared/page-layout";
+import { PdfViewer } from "@/components/shared/pdf-viewer";
 import { useProject } from "@/hooks/use-project";
+
+// 引入 react-pdf 样式
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
 import { useProjectDocuments } from "@/hooks/use-project-documents";
 import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -28,7 +33,9 @@ import {
   Loader2,
   Filter,
   Grid,
-  List
+  List,
+  Maximize2,
+  X
 } from "lucide-react";
 
 type UploadResp = {
@@ -40,9 +47,14 @@ type MarkdownResp = {
 };
 type SourceResp = {
   doc_id: string;
+  preview_url?: string;
   source_url: string;
+  sourceUrl?: string;
   original_filename: string;
   source_format: string;
+  mode?: "inline" | "download";
+  reason?: string | null;
+  preview_content_type?: string | null;
 };
 
 export default function KnowledgeBasePage() {
@@ -58,10 +70,15 @@ export default function KnowledgeBasePage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [previewMarkdown, setPreviewMarkdown] = useState<string>("");
   const [previewSourceUrl, setPreviewSourceUrl] = useState<string>("");
+  const [previewSourceDownloadUrl, setPreviewSourceDownloadUrl] = useState<string>("");
+  const [previewSourceMode, setPreviewSourceMode] = useState<"inline" | "download">("inline");
+  const [previewSourceReason, setPreviewSourceReason] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<"markdown" | "source">("markdown");
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const lastPreviewKeyRef = useRef<string>("");
   const unchangedRoundsRef = useRef(0);
   const lastStatusesRef = useRef<string>("");
 
@@ -72,7 +89,8 @@ export default function KnowledgeBasePage() {
         name: d.original_filename,
         size: d.file_size_bytes ? `${(d.file_size_bytes / 1024 / 1024).toFixed(2)} MB` : "—",
         status: d.conversion_status,
-        progress: d.conversion_status === "completed" ? 100 : d.conversion_status === "processing" ? 50 : 5,
+        progress: d.conversion_status === "completed" ? 100 : d.conversion_status === "processing" ? 60 : d.conversion_status === "failed" ? 0 : 10,
+        statusText: d.conversion_status === "completed" ? "处理完成" : d.conversion_status === "processing" ? "正在解析..." : d.conversion_status === "failed" ? "解析失败" : "排队中",
         updated: new Date(d.upload_at).toLocaleDateString("zh-CN"),
       })),
     [docs]
@@ -115,10 +133,27 @@ export default function KnowledgeBasePage() {
     [documents, activeDoc]
   );
 
+  const [previewContentType, setPreviewContentType] = useState<string>("");
+  const previewExt = useMemo(() => {
+    if (!previewSourceUrl) return "";
+    const noQuery = previewSourceUrl.split("?")[0];
+    const idx = noQuery.lastIndexOf(".");
+    return idx >= 0 ? noQuery.slice(idx + 1).toLowerCase() : "";
+  }, [previewSourceUrl]);
+  const isImage = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"].includes(previewExt) || previewContentType.startsWith("image/");
+  const isPdf = previewExt === "pdf" || previewContentType === "application/pdf";
+  const isHtml = previewExt === "html" || previewExt === "htm" || previewContentType.includes("text/html");
+  const isText = ["txt", "md", "csv", "json", "log", "yaml", "yml", "xml"].includes(previewExt) || previewContentType.startsWith("text/");
+
   useEffect(() => {
     if (!activeDoc || !selectedDoc) {
       setPreviewMarkdown("");
       setPreviewSourceUrl("");
+      setPreviewSourceDownloadUrl("");
+      setPreviewSourceMode("inline");
+      setPreviewSourceReason(null);
+      setPreviewContentType("");
+      lastPreviewKeyRef.current = "";
       setPreviewError(null);
       return;
     }
@@ -126,6 +161,15 @@ export default function KnowledgeBasePage() {
       setPreviewMarkdown("");
       setPreviewSourceUrl("");
       setPreviewError("文档尚未完成解析，暂时无法预览。");
+      lastPreviewKeyRef.current = "";
+      return;
+    }
+    const requestKey = `${activeDoc}:${previewMode}`;
+    const shouldRefetch =
+      requestKey !== lastPreviewKeyRef.current ||
+      (previewMode === "markdown" && !previewMarkdown) ||
+      (previewMode === "source" && !previewSourceUrl);
+    if (!shouldRefetch) {
       return;
     }
     let cancelled = false;
@@ -138,18 +182,38 @@ export default function KnowledgeBasePage() {
           if (!cancelled) {
             setPreviewMarkdown(data.markdown || "");
             setPreviewSourceUrl("");
+            setPreviewSourceDownloadUrl("");
+            setPreviewSourceMode("inline");
+            setPreviewSourceReason(null);
+            setPreviewContentType("");
+            lastPreviewKeyRef.current = requestKey;
           }
         } else {
-          const data = await apiFetchJson<SourceResp>(`/documents/${activeDoc}/source_url`);
+          const data = await apiFetchJson<SourceResp>(`/documents/${activeDoc}/preview_url`);
           if (!cancelled) {
-            setPreviewSourceUrl(data.source_url || "");
+            const inlineUrl = data.preview_url || data.source_url || data.sourceUrl || "";
+            const sourceUrl = data.source_url || data.sourceUrl || "";
+            if (!inlineUrl) {
+              throw new Error("后端未返回 preview_url/source_url，请检查 /documents/{doc_id}/preview_url 接口响应。");
+            }
+            setPreviewSourceUrl(inlineUrl);
+            setPreviewSourceDownloadUrl(sourceUrl || inlineUrl);
+            setPreviewSourceMode(data.mode ?? "inline");
+            setPreviewSourceReason(data.reason ?? null);
+            setPreviewContentType(data.preview_content_type ?? "");
             setPreviewMarkdown("");
+            lastPreviewKeyRef.current = requestKey;
           }
         }
       } catch (e) {
         if (!cancelled) {
           setPreviewMarkdown("");
           setPreviewSourceUrl("");
+          setPreviewSourceDownloadUrl("");
+          setPreviewSourceMode("inline");
+          setPreviewSourceReason(null);
+          setPreviewContentType("");
+          lastPreviewKeyRef.current = "";
           setPreviewError(e instanceof Error ? e.message : "加载预览失败");
         }
       } finally {
@@ -159,7 +223,7 @@ export default function KnowledgeBasePage() {
     return () => {
       cancelled = true;
     };
-  }, [activeDoc, selectedDoc, previewMode]);
+  }, [activeDoc, selectedDoc?.status, previewMode, previewMarkdown, previewSourceUrl]);
 
   const handleUpload = async (file: File | null) => {
     if (!file || !projectId) return;
@@ -294,13 +358,25 @@ export default function KnowledgeBasePage() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="p-5 pt-4">
-                      {doc.status !== "completed" && (
+                      {doc.status !== "completed" && doc.status !== "failed" && (
                         <div className="space-y-2 mb-4">
-                          <div className="flex justify-between text-[10px] font-bold">
-                            <span>处理中...</span>
+                          <div className="flex justify-between text-[10px] font-bold uppercase tracking-tighter">
+                            <span className="flex items-center gap-1">
+                              <Loader2 size={10} className="animate-spin text-primary" />
+                              {doc.statusText}
+                            </span>
                             <span>{doc.progress}%</span>
                           </div>
-                          <Progress value={doc.progress} className="h-1 bg-muted" />
+                          <Progress value={doc.progress} className="h-1 bg-muted shrink-0" />
+                        </div>
+                      )}
+                      {doc.status === "failed" && (
+                        <div className="space-y-2 mb-4">
+                          <div className="flex justify-between text-[10px] font-bold text-destructive">
+                            <span>{doc.statusText}</span>
+                            <span>ERROR</span>
+                          </div>
+                          <Progress value={100} className="h-1 bg-destructive/20 [&>div]:bg-destructive" />
                         </div>
                       )}
                       <div className="flex justify-end gap-2 pt-2 border-t border-border mt-2">
@@ -396,17 +472,60 @@ export default function KnowledgeBasePage() {
                       ) : previewMode === "source" ? (
                         <div className="space-y-3 rounded-sm border border-border bg-background p-3">
                           <p className="text-xs text-muted-foreground">
-                            源文件通过 MinIO 预签名链接访问（1 小时有效）。
+                            源文件内嵌预览（预签名链接 1 小时有效）。
                           </p>
-                          {previewSourceUrl ? (
-                            <Button asChild size="sm" className="h-8">
-                              <a href={previewSourceUrl} target="_blank" rel="noreferrer">
-                                打开源文件
-                              </a>
-                            </Button>
-                          ) : (
+                          {!previewSourceUrl ? (
                             <p className="text-xs text-muted-foreground">暂无可用源文件链接。</p>
+                          ) : previewSourceMode === "download" ? (
+                            <p className="text-xs text-muted-foreground">
+                              {previewSourceReason || "该文件暂不支持站内预览，已降级为下载源文件。"}
+                            </p>
+                          ) : isImage ? (
+                            <img
+                              src={previewSourceUrl}
+                              alt={selectedDoc?.name ?? "源文件"}
+                              className="max-h-[320px] w-full rounded-sm border border-border object-contain"
+                            />
+                          ) : isPdf ? (
+                            <PdfViewer 
+                              url={previewSourceUrl} 
+                              className="h-[320px] w-full"
+                            />
+                          ) : isHtml ? (
+                            <iframe
+                              src={previewSourceUrl}
+                              title="源文件预览"
+                              className="h-[320px] w-full rounded-sm border border-border bg-white"
+                            />
+                          ) : isText ? (
+                            <iframe
+                              src={previewSourceUrl}
+                              title="源文件文本预览"
+                              className="h-[320px] w-full rounded-sm border border-border bg-white"
+                            />
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              当前文件类型暂不支持内嵌预览，请使用下方按钮打开源文件。
+                            </p>
                           )}
+                          <div className="flex flex-wrap gap-2">
+                            {previewSourceUrl ? (
+                              <Button size="sm" variant="secondary" className="h-8 gap-1" onClick={() => setPreviewModalOpen(true)}>
+                                <Maximize2 size={14} />
+                                放大预览
+                              </Button>
+                            ) : null}
+                            {previewSourceDownloadUrl || previewSourceUrl ? (
+                              <Button asChild size="sm" variant="outline" className="h-8">
+                                <a href={previewSourceDownloadUrl || previewSourceUrl} target="_blank" rel="noreferrer">
+                                  在新标签页打开
+                                </a>
+                              </Button>
+                            ) : null}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            站内预览优先使用后端生成的 PDF/HTML 预览副本，不依赖公网 Office 预览服务。
+                          </p>
                         </div>
                       ) : (
                         <pre className="whitespace-pre-wrap break-words rounded-sm border border-border bg-background p-3 text-xs leading-relaxed">
@@ -439,6 +558,61 @@ export default function KnowledgeBasePage() {
           </div>
 
         </div>
+      {previewModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="relative h-[90vh] w-[92vw] max-w-[1400px] rounded-md border border-border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{selectedDoc?.name ?? "源文件预览"}</p>
+                <p className="text-xs text-muted-foreground">居中放大预览</p>
+              </div>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPreviewModalOpen(false)}>
+                <X size={16} />
+              </Button>
+            </div>
+            <div className="h-[calc(90vh-49px)] p-3">
+              {!previewSourceUrl ? (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">暂无可用源文件链接。</div>
+              ) : previewSourceMode === "download" ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground">
+                  <p>{previewSourceReason || "该文件暂不支持站内预览，已降级为下载源文件。"}</p>
+                  <Button asChild size="sm" variant="outline" className="h-8">
+                    <a href={previewSourceDownloadUrl || previewSourceUrl} target="_blank" rel="noreferrer">
+                      打开源文件
+                    </a>
+                  </Button>
+                </div>
+              ) : isImage ? (
+                <img
+                  src={previewSourceUrl}
+                  alt={selectedDoc?.name ?? "源文件"}
+                  className="h-full w-full rounded-sm border border-border object-contain"
+                />
+              ) : isPdf ? (
+                <PdfViewer 
+                  url={previewSourceUrl} 
+                  className="h-full w-full"
+                />
+              ) : isHtml || isText ? (
+                <iframe
+                  src={previewSourceUrl}
+                  title="放大源文件预览"
+                  className="h-full w-full rounded-sm border border-border bg-white"
+                />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground">
+                  <p>当前格式暂不支持弹窗内嵌预览。</p>
+                  <Button asChild size="sm" variant="outline" className="h-8">
+                    <a href={previewSourceUrl} target="_blank" rel="noreferrer">
+                      在新标签页打开
+                    </a>
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppPage>
   );
 }

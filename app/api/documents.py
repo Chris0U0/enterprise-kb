@@ -29,6 +29,7 @@ from app.models.database import Document, User
 from app.models.schemas import DocumentInfo, DocumentUploadResponse, ConversionStatus
 from app.services.conversion.pipeline import detect_format, SUPPORTED_FORMATS
 from app.utils.checksum import compute_md5
+from app.services.preview.generator import ensure_preview
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -331,6 +332,46 @@ async def get_document_source_url(
     return {
         "doc_id": str(doc_id),
         "source_url": url,
+        "original_filename": doc.original_filename,
+        "source_format": doc.source_format,
+    }
+
+
+@router.get("/{doc_id}/preview_url")
+async def get_document_preview_url(
+    doc_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取站内预览链接；docx/pptx 自动转 PDF，失败降级下载源文件"""
+    result = await db.execute(select(Document).where(Document.id == doc_id))
+    doc = result.scalar_one_or_none()
+    if doc is None:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    await ensure_project_member(doc.project_id, user, db)
+    if not doc.source_path:
+        raise HTTPException(status_code=400, detail="源文件路径不存在")
+
+    from app.core.minio_client import get_minio
+
+    minio = get_minio()
+    preview_result = ensure_preview(
+        minio=minio,
+        project_id=str(doc.project_id),
+        doc_id=str(doc.id),
+        filename=doc.original_filename,
+        source_path=doc.source_path,
+    )
+    preview_path = preview_result.preview_path or doc.source_path
+    preview_url = minio.presigned_url(preview_path, expires_hours=1)
+    source_url = minio.presigned_url(doc.source_path, expires_hours=1)
+    return {
+        "doc_id": str(doc.id),
+        "preview_url": preview_url,
+        "source_url": source_url,
+        "mode": preview_result.mode,
+        "reason": preview_result.reason,
+        "preview_content_type": preview_result.content_type,
         "original_filename": doc.original_filename,
         "source_format": doc.source_format,
     }

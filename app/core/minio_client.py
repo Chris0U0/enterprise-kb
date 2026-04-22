@@ -43,6 +43,12 @@ class MinIOClient:
         """Markdown 存储路径: projects/{project_id}/markdown/{doc_id}.md"""
         return f"projects/{project_id}/markdown/{doc_id}.md"
 
+    @staticmethod
+    def preview_path(project_id: str, doc_id: str, ext: str) -> str:
+        """预览文件存储路径: projects/{project_id}/preview/{doc_id}.{ext}"""
+        clean_ext = ext.lstrip(".")
+        return f"projects/{project_id}/preview/{doc_id}.{clean_ext}"
+
     # ── 上传 ─────────────────────────────────────────────
     def upload_source(
         self, project_id: str, doc_id: str, filename: str, data: bytes, content_type: str
@@ -68,6 +74,17 @@ class MinIOClient:
             io.BytesIO(data),
             length=len(data),
             content_type="text/markdown",
+        )
+        return path
+
+    def upload_bytes(self, path: str, data: bytes, content_type: str) -> str:
+        """按指定路径上传任意二进制文件"""
+        self.client.put_object(
+            self.bucket,
+            path,
+            io.BytesIO(data),
+            length=len(data),
+            content_type=content_type,
         )
         return path
 

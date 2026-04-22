@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
 
+    # ── Gotenberg ─────────────────────────────────────────
+    GOTENBERG_URL: str = "http://localhost:3005"
+
     # ── LLM ──────────────────────────────────────────────
     # openai_compat = 阿里云 DashScope OpenAI 兼容接口（推荐与通义千问配合）
     # anthropic = Claude（AsyncAnthropic Messages API）

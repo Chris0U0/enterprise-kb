@@ -136,6 +136,20 @@ def task_process_document(
                     upload_by=upload_by,
                 )
 
+                # 异步预生成预览副本（docx/pptx/xls/xlsx -> pdf/html）
+                try:
+                    from app.services.preview.generator import ensure_preview
+
+                    ensure_preview(
+                        minio=minio,
+                        project_id=project_id,
+                        doc_id=doc_id,
+                        filename=filename,
+                        source_path=source_path,
+                    )
+                except Exception as preview_err:
+                    logger.warning(f"[Celery] 预览副本生成失败，已降级为源文件下载: {preview_err}")
+
                 await db.commit()
                 logger.info(f"[Celery] 文档处理完成: {filename}")
 
