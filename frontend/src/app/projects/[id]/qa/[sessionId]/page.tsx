@@ -8,6 +8,7 @@ import { getProjectDisplayName } from "@/lib/project";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, FileText } from "lucide-react";
+import { useQaSessionDetail } from "@/hooks/use-qa-session-detail";
 
 export default function ProjectQaSessionPage() {
   const params = useParams();
@@ -15,6 +16,7 @@ export default function ProjectQaSessionPage() {
   const id = params.id as string;
   const sessionId = params.sessionId as string;
   const name = getProjectDisplayName(id);
+  const { detail, loading, error } = useQaSessionDetail(sessionId);
 
   const breadcrumbs = breadcrumbsFromPathname(pathname, {
     segmentLabels: {
@@ -45,13 +47,11 @@ export default function ProjectQaSessionPage() {
             <CardTitle className="font-serif text-lg italic">问题</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-relaxed">
-            <p className="font-medium">
-              MD5 校验模块与审计日志如何关联？
-            </p>
+            {loading ? <p className="text-muted-foreground">加载会话详情中...</p> : null}
+            {error ? <p className="text-destructive">{error}</p> : null}
+            <p className="font-medium">{detail?.question || "（无问题文本）"}</p>
             <div className="rounded-sm border border-border bg-muted/30 p-4">
-              <p className="text-muted-foreground">
-                （此处对接流式检索与最终答案正文；可展示引用片段与 Agent 轨迹。）
-              </p>
+              <p className="whitespace-pre-wrap text-muted-foreground">{detail?.answer || "（无答案正文）"}</p>
             </div>
           </CardContent>
         </Card>
@@ -64,9 +64,10 @@ export default function ProjectQaSessionPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-xs text-muted-foreground">
-            <p>· 《需求文档V2.pdf》 第 4 节</p>
-            <p>· 《安全合规指南.md》 2.1</p>
-            <p>· DocSection 溯源字段占位</p>
+            {(detail?.cited_docs ?? []).map((doc) => (
+              <p key={doc}>· {doc}</p>
+            ))}
+            {!detail?.cited_docs?.length ? <p>· 暂无引用记录</p> : null}
           </CardContent>
         </Card>
       </div>

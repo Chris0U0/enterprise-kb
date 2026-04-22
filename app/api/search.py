@@ -7,7 +7,6 @@ from __future__ import annotations
 import time
 import uuid
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -17,7 +16,7 @@ from app.api.deps import ensure_project_member, get_current_user
 from app.core.database import get_db
 from app.core.config import get_settings
 from app.models.database import User
-from app.models.schemas import SearchRequest, SearchResponse, SearchResult
+from app.models.schemas import SearchRequest, SearchResponse, SearchResult, SkillInvokeRequest
 from app.services.retrieval.router import route_query, RetrievalStrategy
 from app.services.retrieval.searcher import get_searcher
 from app.services.llm import complete_chat
@@ -178,10 +177,9 @@ async def search_stream(
 @router.post("/skill/{skill_name}")
 async def invoke_skill(
     skill_name: str,
-    request: SearchRequest,
+    request: SkillInvokeRequest,
     user: User = Depends(get_current_user),
-    doc_ids: Optional[list[uuid.UUID]] = None,
-    params: Optional[dict] = None,
+    db: AsyncSession = Depends(get_db),
 ):
     """
     直接调用指定 Skill
@@ -206,8 +204,8 @@ async def invoke_skill(
     skill_input = SkillInput(
         query=request.query,
         project_id=str(request.project_id),
-        doc_ids=[str(d) for d in (doc_ids or [])],
-        params=params or {},
+        doc_ids=[str(d) for d in request.doc_ids],
+        params=request.params or {},
     )
 
     output = await skill.execute(skill_input)

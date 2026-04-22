@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
+import { useMemo, useState } from "react";
 import { AppPage, PageHeader, PageToolbar } from "@/components/shared/page-layout";
 import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { getProjectDisplayName } from "@/lib/project";
@@ -10,31 +11,28 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { MessageSquareText, Search, ChevronRight } from "lucide-react";
-
-const MOCK_SESSIONS = [
-  {
-    id: "sess-001",
-    question: "MD5 校验模块与审计日志如何关联？",
-    preview: "根据《需求文档V2》第 4 节，系统应在写入审计表时同步记录文件哈希…",
-    user: "张三",
-    time: "2026-04-16 14:22",
-    citations: 3,
-  },
-  {
-    id: "sess-002",
-    question: "灰度发布阶段有哪些风险点？",
-    preview: "ReportGenerationSkill 识别到 2 条中级风险，涉及测试覆盖率与老旧文档签名…",
-    user: "李四",
-    time: "2026-04-16 11:05",
-    citations: 5,
-  },
-];
+import { useQaSessions } from "@/hooks/use-qa-sessions";
 
 export default function ProjectQaListPage() {
   const params = useParams();
   const pathname = usePathname();
   const id = params.id as string;
   const name = getProjectDisplayName(id);
+  const [keyword, setKeyword] = useState("");
+  const { items, loading, error } = useQaSessions(id, keyword);
+
+  const rows = useMemo(
+    () =>
+      items.map((x) => ({
+        id: x.session_id,
+        question: x.question || "（无问题文本）",
+        preview: x.answer_preview || "（无答案预览）",
+        user: x.user_id ?? "未知用户",
+        time: x.created_at ? new Date(x.created_at).toLocaleString("zh-CN") : "—",
+        citations: x.citation_count ?? 0,
+      })),
+    [items]
+  );
 
   const breadcrumbs = breadcrumbsFromPathname(pathname, {
     segmentLabels: { [`/projects/${id}`]: name },
@@ -55,15 +53,19 @@ export default function ProjectQaListPage() {
             placeholder="按问题、操作人搜索…"
             className="pl-9"
             aria-label="搜索问答记录"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
           />
         </div>
-        <Button variant="outline" size="sm" type="button">
+        <Button variant="outline" size="sm" type="button" disabled>
           导出 CSV
         </Button>
       </PageToolbar>
+      {loading ? <p className="text-sm text-muted-foreground">加载问答记录中...</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <div className="space-y-3">
-        {MOCK_SESSIONS.map((row) => (
+        {rows.map((row) => (
           <Link key={row.id} href={`/projects/${id}/qa/${row.id}`}>
             <Card className="paper-border transition-colors hover:border-primary/40">
               <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -89,6 +91,9 @@ export default function ProjectQaListPage() {
             </Card>
           </Link>
         ))}
+        {!loading && rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">暂无问答记录</p>
+        ) : null}
       </div>
     </AppPage>
   );

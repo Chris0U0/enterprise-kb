@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AppPage, PageHeader } from "@/components/shared/page-layout";
@@ -13,9 +13,9 @@ import { Button } from "@/components/ui/button";
 import { BookOpen, Search, Send, FileText, Loader2 } from "lucide-react";
 import { useProject } from "@/hooks/use-project";
 import { useProjectList } from "@/hooks/use-project-list";
-import { useSearchStreamMock } from "@/hooks/use-search-stream-mock";
+import { useSearchStream } from "@/hooks/use-search-stream";
 import { SearchProgressPanel } from "@/components/copilot/search-progress-panel";
-import { CitationList, type CitationItem } from "@/components/copilot/citation-list";
+import { CitationList } from "@/components/copilot/citation-list";
 import { AnswerActions } from "@/components/copilot/answer-actions";
 import { projectPath, withProjectQuery } from "@/lib/project-links";
 
@@ -29,21 +29,13 @@ export default function CopilotPage() {
   const resolvedProjectId = searchParams.get("projectId") ?? projectList[0]?.id ?? undefined;
   const { project: meta } = useProject(resolvedProjectId);
 
-  const { steps, running, run } = useSearchStreamMock();
+  const { steps, running, answer, error, citationLabels, start } = useSearchStream();
   const [input, setInput] = useState("");
   const [complex, setComplex] = useState(false);
 
-  const citations: CitationItem[] = useMemo(
-    () => [
-      { id: "1", label: "需求文档V2.pdf · 第4页", href: "/knowledge" },
-      { id: "2", label: "安全合规指南.md", href: "/knowledge" },
-    ],
-    []
-  );
-
   const send = () => {
-    if (!input.trim()) return;
-    run(complex);
+    if (!input.trim() || !resolvedProjectId) return;
+    void start(input.trim(), resolvedProjectId, complex ? 8 : 5);
   };
 
   return (
@@ -114,26 +106,16 @@ export default function CopilotPage() {
                   <div className="paper-shadow group relative border border-border bg-white p-6 shadow-sm">
                     <div className="absolute -left-2 top-6 h-8 w-1 bg-primary opacity-0 transition-opacity group-hover:opacity-100" />
                     <div className="prose prose-sm max-w-none">
-                      <p className="mb-4">
-                        根据您的需求文档，本项目采用了微服务架构。在{" "}
-                        <span className="cursor-help font-medium text-blue-800 underline decoration-dotted">
-                          [需求文档V2.pdf · 第4页]
-                        </span>{" "}
-                        中明确提到了对 MD5 校验的要求。
-                      </p>
-                      <p className="mb-4">
-                        为了满足企业审计合规要求，系统需要在文件上传的第一时间计算其哈希值。以下是建议的实现逻辑：
-                      </p>
-                      <div className="my-4 overflow-x-auto rounded-sm border border-border bg-muted p-4 font-mono text-xs">
-                        {`def verify_md5(file_path):
-    # 满足企业审计合规要求
-    # 1. 读取文件流
-    # 2. 计算 MD5 哈希
-    # 3. 与数据库记录比对
-    return calculate_hash(file_path)`}
-                      </div>
+                      {answer ? (
+                        <p className="mb-4 whitespace-pre-wrap">{answer}</p>
+                      ) : (
+                        <p className="mb-4 text-muted-foreground">
+                          输入问题后将调用后端流式检索接口，实时展示回答与引用来源。
+                        </p>
+                      )}
+                      {error ? <p className="text-destructive">{error}</p> : null}
                     </div>
-                    <CitationList items={citations} projectId={resolvedProjectId ?? ""} />
+                    <CitationList items={citationLabels} projectId={resolvedProjectId ?? ""} />
                     <AnswerActions
                       projectId={resolvedProjectId ?? ""}
                       projects={PROJECT_OPTIONS}
@@ -142,8 +124,8 @@ export default function CopilotPage() {
                   </div>
 
                   <div className="flex justify-end">
-                    <div className="max-w-[80%] border border-border bg-secondary px-4 py-3 text-sm">
-                      请详细解释一下 MD5 校验在审计日志中的体现。
+                  <div className="max-w-[80%] border border-border bg-secondary px-4 py-3 text-sm">
+                      {input || "请详细解释一下 MD5 校验在审计日志中的体现。"}
                     </div>
                   </div>
                 </div>

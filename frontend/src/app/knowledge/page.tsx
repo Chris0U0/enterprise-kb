@@ -1,11 +1,12 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AppPage, PageHeader, PageToolbar } from "@/components/shared/page-layout";
 import { useProject } from "@/hooks/use-project";
+import { useProjectDocuments } from "@/hooks/use-project-documents";
 import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
+import { apiFetchJson } from "@/lib/api-client";
 import { 
   FileText, 
   Upload, 
@@ -28,42 +30,64 @@ import {
   List
 } from "lucide-react";
 
+type UploadResp = {
+  doc_id: string;
+};
+
 export default function KnowledgeBasePage() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId");
   const { project: projectCtx } = useProject(projectId ?? undefined);
+  const { docs, loading, refetch } = useProjectDocuments(projectId ?? undefined);
 
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [activeDoc, setActiveDoc] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [activeDoc, setActiveDoc] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  // Mock 文档处理状态数据
-  const [documents, setDocuments] = useState([
-    { id: 1, name: "需求文档V2.pdf", size: "4.2 MB", status: "completed", progress: 100, updated: "2026-04-12" },
-    { id: 2, name: "架构设计说明书.docx", size: "1.8 MB", status: "processing", progress: 65, updated: "2026-04-15" },
-    { id: 3, name: "API接口定义.md", size: "124 KB", status: "pending", progress: 0, updated: "2026-04-16" },
-    { id: 4, name: "安全合规指南.pdf", size: "2.1 MB", status: "completed", progress: 100, updated: "2026-03-20" },
-  ]);
+  const documents = useMemo(
+    () =>
+      docs.map((d) => ({
+        id: d.id,
+        name: d.original_filename,
+        size: d.file_size_bytes ? `${(d.file_size_bytes / 1024 / 1024).toFixed(2)} MB` : "—",
+        status: d.conversion_status,
+        progress: d.conversion_status === "completed" ? 100 : d.conversion_status === "processing" ? 50 : 5,
+        updated: new Date(d.upload_at).toLocaleDateString("zh-CN"),
+      })),
+    [docs]
+  );
 
-  // 模拟轮询状态更新
   useEffect(() => {
-    const timer = setInterval(() => {
-      setDocuments(docs => docs.map(doc => {
-        if (doc.status === 'processing') {
-          const nextProgress = doc.progress + 5;
-          return {
-            ...doc,
-            progress: nextProgress >= 100 ? 100 : nextProgress,
-            status: nextProgress >= 100 ? 'completed' : 'processing'
-          };
-        }
-        if (doc.status === 'pending') {
-          return { ...doc, status: 'processing', progress: 5 };
-        }
-        return doc;
-      }));
-    }, 2000);
-    return () => clearInterval(timer);
-  }, []);
+    const hasRunning = docs.some((d) => d.conversion_status === "pending" || d.conversion_status === "processing");
+    if (!hasRunning) return;
+    const timer = window.setInterval(() => {
+      refetch();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [docs, refetch]);
+
+  const handleUpload = async (file: File | null) => {
+    if (!file || !projectId) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("project_id", projectId);
+      await apiFetchJson<UploadResp>("/documents/upload", {
+        method: "POST",
+        body: form,
+      });
+      await refetch();
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "上传失败");
+    } finally {
+      setUploading(false);
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
+    }
+  };
 
   return (
     <AppPage surface="canvas">
@@ -81,13 +105,24 @@ export default function KnowledgeBasePage() {
                 aria-label="搜索文档"
               />
             </div>
-            <Button className="gap-2 bg-primary">
+            <Button
+              className="gap-2 bg-primary"
+              onClick={() => uploadInputRef.current?.click()}
+              disabled={!projectId || uploading}
+            >
               <Upload size={18} />
-              上传文件
+              {uploading ? "上传中..." : "上传文件"}
             </Button>
+            <input
+              ref={uploadInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => void handleUpload(e.target.files?.[0] ?? null)}
+            />
           </div>
         }
       />
+      {uploadError ? <p className="mb-4 text-sm text-destructive">{uploadError}</p> : null}
 
       {projectId && projectCtx ? (
         <div className="mb-6 flex flex-wrap items-center gap-2 rounded-sm border border-primary/20 bg-primary/5 px-4 py-2 text-sm">
@@ -111,7 +146,7 @@ export default function KnowledgeBasePage() {
             <PageToolbar
               end={
                 <p className="font-serif text-xs italic text-muted-foreground">
-                  共 24 篇文档 · 占用 156.4 MB
+                  {loading ? "加载中..." : `共 ${documents.length} 篇文档`}
                 </p>
               }
             >
@@ -143,9 +178,9 @@ export default function KnowledgeBasePage() {
               </div>
             </PageToolbar>
 
-            {viewMode === 'grid' ? (
+            {viewMode === "grid" ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {documents.map(doc => (
+                {documents.map((doc) => (
                   <Card 
                     key={doc.id} 
                     className={cn(
@@ -166,10 +201,10 @@ export default function KnowledgeBasePage() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="p-5 pt-4">
-                      {doc.status !== 'completed' && (
+                      {doc.status !== "completed" && (
                         <div className="space-y-2 mb-4">
                           <div className="flex justify-between text-[10px] font-bold">
-                            <span>正在处理...</span>
+                            <span>处理中...</span>
                             <span>{doc.progress}%</span>
                           </div>
                           <Progress value={doc.progress} className="h-1 bg-muted" />
@@ -197,7 +232,7 @@ export default function KnowledgeBasePage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {documents.map(doc => (
+                      {documents.map((doc) => (
                         <tr 
                           key={doc.id} 
                           className={cn(
@@ -237,7 +272,7 @@ export default function KnowledgeBasePage() {
                     文档结构预览
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    {activeDoc ? `解析自: ${documents.find(d => d.id === activeDoc)?.name}` : "请从左侧选择一个文档"}
+                    {activeDoc ? `解析自: ${documents.find((d) => d.id === activeDoc)?.name}` : "请从左侧选择一个文档"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -290,8 +325,9 @@ function StatusIndicator({ status, inline = false }: { status: string, inline?: 
     completed: { color: "text-green-600 bg-green-50 border-green-200", icon: <CheckCircle2 size={12} />, label: "已完成" },
     processing: { color: "text-blue-600 bg-blue-50 border-blue-200", icon: <Loader2 size={12} className="animate-spin" />, label: "正在解析" },
     pending: { color: "text-muted-foreground bg-muted border-border", icon: <Clock size={12} />, label: "排队中" },
+    failed: { color: "text-red-600 bg-red-50 border-red-200", icon: <Clock size={12} />, label: "失败" },
   };
-  const config = configs[status as keyof typeof configs];
+  const config = configs[status as keyof typeof configs] ?? configs.pending;
 
   if (inline) {
     return (

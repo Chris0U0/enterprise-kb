@@ -11,7 +11,9 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user, ensure_project_member
 from app.core.database import get_db
+from app.models.database import User
 from app.models.schemas import MCPListResponse, MCPOutlineResponse, MCPSearchResponse, MCPReadResponse
 
 logger = logging.getLogger(__name__)
@@ -23,12 +25,14 @@ router = APIRouter(prefix="/mcp", tags=["MCP Tools"])
 async def mcp_list_documents(
     project_id: uuid.UUID,
     status: str | None = Query(default="completed", description="状态过滤"),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     MCP Tool: list_documents
     列出项目中所有文档，Agent 先了解知识库全貌再决策
     """
+    await ensure_project_member(project_id, user, db)
     from app.services.mcp_tools.list_documents import list_documents
     return await list_documents(project_id, db, status_filter=status)
 
@@ -37,12 +41,14 @@ async def mcp_list_documents(
 async def mcp_get_outline(
     doc_id: uuid.UUID,
     project_id: uuid.UUID = Query(..., description="项目 ID"),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     MCP Tool: get_document_outline
     获取指定文档的章节目录树，Agent 先看目录再精读
     """
+    await ensure_project_member(project_id, user, db)
     from app.services.mcp_tools.get_outline import get_document_outline
     try:
         return await get_document_outline(doc_id, project_id, db)
@@ -55,12 +61,14 @@ async def mcp_search_sections(
     query: str = Query(..., min_length=1, description="搜索关键词"),
     project_id: uuid.UUID = Query(..., description="项目 ID"),
     limit: int = Query(default=10, ge=1, le=50),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     MCP Tool: search_sections
     按关键词在项目文档中搜索，返回匹配章节（PostgreSQL 全文检索）
     """
+    await ensure_project_member(project_id, user, db)
     from app.services.mcp_tools.search_sections import search_sections
     return await search_sections(query, project_id, db, limit=limit)
 
@@ -70,12 +78,14 @@ async def mcp_read_section(
     doc_id: uuid.UUID,
     section_path: str = Query(..., description="章节路径"),
     project_id: uuid.UUID = Query(..., description="项目 ID"),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     MCP Tool: read_section
     读取指定章节的完整 Markdown 内容，保留原始结构
     """
+    await ensure_project_member(project_id, user, db)
     from app.services.mcp_tools.read_section import read_section
     try:
         return await read_section(doc_id, section_path, project_id, db)

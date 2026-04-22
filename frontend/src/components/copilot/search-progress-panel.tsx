@@ -2,7 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { StreamStep } from "@/hooks/use-search-stream-mock";
+import type { StreamStep } from "@/hooks/use-search-stream";
 
 export function SearchProgressPanel({
   steps,

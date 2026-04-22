@@ -10,9 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.config import get_settings
-from app.models.database import AuditLog
+from app.models.database import AuditLog, User
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -25,8 +26,10 @@ async def trigger_evaluation(
     project_id: uuid.UUID | None = None,
     hours: int = Query(default=24, ge=1, le=168),
     max_samples: int = Query(default=50, ge=5, le=200),
+    user: User = Depends(get_current_user),
 ):
     """手动触发一次批量评估"""
+    _require_admin(user)
     _check_enabled()
     from app.services.evaluation.scheduler import schedule_daily_evaluation
 
@@ -52,6 +55,7 @@ async def trigger_evaluation(
 @router.post("/ci")
 async def ci_evaluation(
     golden_path: str = Query(default="tests/golden_dataset.json"),
+    user: User = Depends(get_current_user),
 ):
     """
     CI/CD 回归评估
@@ -59,6 +63,7 @@ async def ci_evaluation(
     使用金标准测试集评估，返回是否通过阈值。
     阈值由 RAGAS_MIN_THRESHOLD 配置控制。
     """
+    _require_admin(user)
     _check_enabled()
     from app.services.evaluation.scheduler import run_ci_evaluation
 
@@ -72,6 +77,7 @@ async def ci_evaluation(
 async def get_evaluation_history(
     project_id: uuid.UUID | None = None,
     limit: int = Query(default=20, ge=1, le=100),
+    _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """查看评估历史记录"""
@@ -111,6 +117,7 @@ async def get_evaluation_history(
 async def compare_runs(
     run_id_a: str = Query(..., description="基线 run_id"),
     run_id_b: str = Query(..., description="对比 run_id"),
+    _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """对比两次评估的分数差异"""
@@ -152,3 +159,8 @@ async def compare_runs(
 def _check_enabled():
     if not getattr(settings, "RAGAS_ENABLED", False):
         raise HTTPException(status_code=400, detail="RAGAS 评估未启用，请设置 RAGAS_ENABLED=true")
+
+
+def _require_admin(user: User):
+    if (user.role or "").lower() != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可执行该操作")
