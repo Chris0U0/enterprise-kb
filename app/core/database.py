@@ -5,27 +5,56 @@ PostgreSQL 异步连接管理（修正版）
   - get_db() 作为 FastAPI 依赖注入的 session 工厂
   - 正常路径: yield session → commit
   - 异常路径: rollback → re-raise（让 FastAPI 返回错误响应）
-  - 无论成功失败: finally → close 释放连接回池
+  - async with AsyncSessionLocal() 在请求结束时关闭 session、归还连接
+
+连接健壮性（Docker / 梯子 / 瞬时断连）：
+  - connect_args.timeout → asyncpg 建连超时
+  - pool_pre_ping → 从池取出前探测连接是否仍可用
+  - pool_recycle → 定期丢弃过旧连接，减少「半开」长连接被中间件掐断
 """
 from __future__ import annotations
 
 import logging
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=(settings.APP_ENV == "development"),
-    pool_size=20,
-    max_overflow=10,
-    pool_pre_ping=True,
-)
+
+def build_async_engine_kwargs(
+    s: Settings,
+    *,
+    pool_size: int = 20,
+    max_overflow: int = 10,
+) -> dict:
+    """与 Celery 等子进程共用，避免各处 create_async_engine 参数漂移。"""
+    return {
+        "echo": s.APP_ENV == "development",
+        "pool_size": pool_size,
+        "max_overflow": max_overflow,
+        "pool_pre_ping": True,
+        "pool_recycle": s.POSTGRES_POOL_RECYCLE,
+        "connect_args": {
+            # asyncpg.connect(timeout=...)：TCP + 握手阶段总超时
+            "timeout": float(s.POSTGRES_CONNECT_TIMEOUT),
+        },
+    }
+
+
+def create_async_engine_from_settings(
+    s: Settings,
+    *,
+    pool_size: int = 20,
+    max_overflow: int = 10,
+) -> AsyncEngine:
+    return create_async_engine(s.DATABASE_URL, **build_async_engine_kwargs(s, pool_size=pool_size, max_overflow=max_overflow))
+
+
+engine = create_async_engine_from_settings(settings)
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
@@ -57,5 +86,3 @@ async def get_db() -> AsyncSession:
             logger.warning(f"DB session rollback: {type(e).__name__}: {e}")
             await session.rollback()
             raise
-        finally:
-            await session.close()

@@ -128,7 +128,7 @@ export function AnswerActions({
               type="button"
               className="mt-4 w-full text-xs"
               onClick={() => {
-                const md = `> 引用自 Copilot\n> ${defaultSnippet.slice(0, 200)}…\n`;
+                const md = `> 引用自 AI\n> ${defaultSnippet.slice(0, 200)}…\n`;
                 void navigator.clipboard?.writeText(md);
                 setCollabOpen(false);
               }}

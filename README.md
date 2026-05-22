@@ -83,6 +83,8 @@ uvicorn app.main:app --reload --port 8000
 
 # 7. （可选）Celery worker — 文档异步转换
 celery -A app.core.celery_app worker --loglevel=info
+# Windows：应用已在 celery_app 中对本机默认使用 solo 进程池，避免 prefork 触发
+# 「ValueError: not enough values to unpack (expected 3, got 0)」。若仍用手动命令覆盖池类型，请加 --pool=solo。
 ```
 
 ### Docker 构建 Celery 镜像（依赖基础镜像）

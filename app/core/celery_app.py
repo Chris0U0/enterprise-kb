@@ -14,6 +14,7 @@ Celery 异步任务配置（修正版）
 from __future__ import annotations
 
 import logging
+import sys
 
 from celery import Celery
 
@@ -22,11 +23,23 @@ from app.core.config import get_settings
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
+# Windows 上默认 prefork（billiard 多进程）与 Celery 5.x 任务分发不兼容，
+# 会触发 trace.fast_trace_task 中「expected 3, got 0」类错误；开发机请用 solo。
+_IS_WIN = sys.platform == "win32"
+
 celery_app = Celery(
     "enterprise_kb",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
 )
+
+_worker_common = {
+    "worker_prefetch_multiplier": 1,
+}
+if _IS_WIN:
+    _worker_common["worker_pool"] = "solo"
+else:
+    _worker_common["worker_max_tasks_per_child"] = 50
 
 celery_app.conf.update(
     task_serializer="json",
@@ -39,8 +52,7 @@ celery_app.conf.update(
     task_track_started=True,
     task_time_limit=600,
     task_soft_time_limit=540,
-    worker_prefetch_multiplier=1,
-    worker_max_tasks_per_child=50,
+    **_worker_common,
     # Phase 3: Beat 定时任务调度
     beat_schedule={
         "daily-ragas-evaluation": {
@@ -89,19 +101,19 @@ def task_process_document(
     import uuid
 
     async def _run():
-        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
         from sqlalchemy import update as sql_update
         from app.core.config import get_settings
+        from app.core.database import create_async_engine_from_settings
         from app.core.minio_client import get_minio
         from app.services.conversion.pipeline import process_document
         from app.models.database import Document
 
         settings = get_settings()
-        engine = create_async_engine(
-            settings.DATABASE_URL,
+        engine = create_async_engine_from_settings(
+            settings,
             pool_size=5,
             max_overflow=2,
-            pool_pre_ping=True,
         )
         SessionFactory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

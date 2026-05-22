@@ -6,6 +6,7 @@ Phase 1 + Phase 2 + Phase 3:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -45,6 +46,38 @@ async def lifespan(app: FastAPI):
     logger.info(f"  Embedding: {settings.BGE_M3_MODEL_PATH}")
     logger.info(f"  Contextual Retrieval: {'ON' if settings.CONTEXTUAL_RETRIEVAL_ENABLED else 'OFF'}")
     logger.info("=" * 60)
+
+    # PostgreSQL：启动时带重试探测（Docker / 梯子闪断时便于日志定位，不阻塞应用启动）
+    try:
+        from sqlalchemy import text
+
+        from app.core.database import engine
+
+        last_err: Exception | None = None
+        n = max(1, settings.POSTGRES_STARTUP_CONNECT_ATTEMPTS)
+        for attempt in range(1, n + 1):
+            try:
+                async with engine.connect() as conn:
+                    await conn.execute(text("SELECT 1"))
+                logger.info(
+                    f"PostgreSQL 已连接 ({settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB})"
+                )
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                logger.warning(
+                    f"PostgreSQL 连接尝试 {attempt}/{n} 失败: {type(e).__name__}: {e}"
+                )
+                if attempt < n:
+                    await asyncio.sleep(settings.POSTGRES_STARTUP_RETRY_DELAY_SEC)
+        if last_err is not None:
+            logger.error(
+                "PostgreSQL 在启动阶段仍不可达；依赖数据库的接口可能失败。请检查 Docker、"
+                f"端口映射与 .env（POSTGRES_*）。最后错误: {last_err}"
+            )
+    except Exception as e:
+        logger.error(f"PostgreSQL 启动探测异常: {e}")
 
     # 初始化 Qdrant collection
     try:
@@ -104,6 +137,14 @@ async def lifespan(app: FastAPI):
         logger.info(f"RAGAS 评估已启用 (采样率: {settings.RAGAS_SAMPLE_RATE}, 阈值: {settings.RAGAS_MIN_THRESHOLD})")
 
     yield
+
+    try:
+        from app.core.database import engine
+
+        await engine.dispose()
+        logger.info("PostgreSQL 连接池已释放 (engine.dispose)")
+    except Exception as e:
+        logger.warning(f"engine.dispose 时: {e}")
 
     logger.info("应用关闭")
 

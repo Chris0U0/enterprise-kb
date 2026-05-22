@@ -200,7 +200,7 @@ export default function GraphExplorerPage() {
                   </p>
                 </div>
                 <Button size="sm" className="w-full h-8 text-xs gap-1 font-sans">
-                  在 Copilot 中分析该节点 <ChevronRight size={14} />
+                  在 AI 中分析该节点 <ChevronRight size={14} />
                 </Button>
               </CardContent>
             </Card>

@@ -126,8 +126,9 @@ export default function CopilotPage() {
 
   // 当回答中出现新的引用时，自动预览第一个引用
   useEffect(() => {
-    if (citations.length > 0 && !activeDocId) {
-      setActiveDocId(citations[0].doc_id);
+    const firstId = citations[0]?.doc_id;
+    if (firstId && !activeDocId) {
+      setActiveDocId(firstId);
     }
   }, [citations, activeDocId]);
 
@@ -155,7 +156,7 @@ export default function CopilotPage() {
     >
       <PageHeader
         className="border-b border-border bg-white/50 px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8"
-        title="AI Copilot 研读室"
+        title="AI 研读室"
         description="基于选定文档进行深度研读与问答"
         breadcrumbs={breadcrumbsFromPathname("/copilot")}
         actions={
@@ -348,7 +349,7 @@ export default function CopilotPage() {
                     }}
                     placeholder="询问关于项目的问题..."
                     className="h-14 border-input bg-white pr-24 text-base font-sans shadow-sm focus-visible:ring-ring"
-                    aria-label="向 Copilot 提问"
+                    aria-label="向 AI 提问"
                   />
                   <Button
                     size="icon"
@@ -385,7 +386,13 @@ export default function CopilotPage() {
                 <div className="flex gap-1 shrink-0">
                   {previewLoading && <Loader2 size={16} className="animate-spin text-muted-foreground mr-2" />}
                   <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <Link href={withProjectQuery("/knowledge", resolvedProjectId ?? "", activeDocId ?? undefined)}>
+                    <Link
+                      href={withProjectQuery(
+                        "/knowledge",
+                        resolvedProjectId ?? "",
+                        activeDocId ? { docId: activeDocId } : undefined
+                      )}
+                    >
                       <BookOpen size={16} />
                     </Link>
                   </Button>

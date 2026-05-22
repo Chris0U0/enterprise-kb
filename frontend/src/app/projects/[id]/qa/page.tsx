@@ -42,7 +42,7 @@ export default function ProjectQaListPage() {
     <AppPage surface="canvas">
       <PageHeader
         title="问答记录"
-        description="本项目内的检索问答与 Copilot 会话留痕，支持审计与追溯（数据待对接 audit_logs / 专用会话表）。"
+        description="本项目内的检索问答与 AI 会话留痕，支持审计与追溯（数据待对接 audit_logs / 专用会话表）。"
         breadcrumbs={breadcrumbs}
       />
 
