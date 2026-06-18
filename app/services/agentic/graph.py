@@ -113,6 +113,8 @@ async def run_agentic_rag(
         "original_query": query,
         "project_id": project_id,
         "top_k": top_k,
+        "deep": False,
+        "chat_history": None,
         "plan": [],
         "current_step": 0,
         "retrieved_contexts": [],
@@ -155,6 +157,7 @@ async def run_agentic_rag(
     return {
         "answer": final_state.get("final_answer", ""),
         "citations": final_state.get("citations", []),
+        "retrieved_contexts": final_state.get("retrieved_contexts", []),
         "traces": final_state.get("traces", []),
         "confidence": final_state.get("overall_confidence", 0.0),
         "steps_executed": completed_steps,

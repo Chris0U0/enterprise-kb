@@ -15,6 +15,9 @@ env/
 .env
 !.env.example
 
+# Local data (Kuzu graph DB, etc.)
+data/kuzu_db/
+
 # IDE / OS
 .idea/
 .vscode/

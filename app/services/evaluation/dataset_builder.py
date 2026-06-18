@@ -69,13 +69,14 @@ async def build_dataset_from_logs(
         if not query:
             continue
 
-        # 从 payload 中提取答案和上下文
-        # 注意：当前 audit_logs 记录了 query, strategy, result_count
-        # 需要在 search.py 中扩展记录 answer 和 contexts
-        answer = payload.get("answer", "")
+        # 从 payload 提取 answer / contexts（由 qa_audit 在各问答路径写入）
+        answer = (payload.get("answer") or "").strip()
+        if not answer:
+            continue
+
         contexts = payload.get("contexts", [])
         if isinstance(contexts, list):
-            contexts = [str(c)[:500] for c in contexts]
+            contexts = [str(c)[:500] for c in contexts if c]
 
         samples.append(EvalSample(
             query=query,

@@ -41,8 +41,14 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info("企业项目知识库平台 启动中... (Phase 1 + Phase 2)")
     logger.info(f"  环境: {settings.APP_ENV}")
-    logger.info(f"  LLM:  {settings.ANTHROPIC_MODEL}")
+    logger.info(f"  LLM:  {settings.OPENAI_MODEL if settings.LLM_PROVIDER == 'openai_compat' else settings.ANTHROPIC_MODEL}")
     logger.info(f"  Embedding: {settings.BGE_M3_MODEL_PATH}")
+    logger.info(
+        f"  RAG 快速模式: {'ON' if settings.RAG_FAST_MODE else 'OFF'} "
+        f"(候选 {settings.RAG_FAST_CANDIDATE_COUNT}, skip_reranker={settings.RAG_FAST_SKIP_RERANKER})"
+    )
+    if settings.OPENAI_RETRIEVAL_MODEL:
+        logger.info(f"  检索增强模型: {settings.OPENAI_RETRIEVAL_MODEL}")
     logger.info(f"  Contextual Retrieval: {'ON' if settings.CONTEXTUAL_RETRIEVAL_ENABLED else 'OFF'}")
     logger.info("=" * 60)
 

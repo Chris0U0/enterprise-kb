@@ -1,10 +1,10 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useProject } from "@/hooks/use-project";
+import { useProjectList } from "@/hooks/use-project-list";
 import { fallbackProjectRecord } from "@/data/project-registry";
 import ReactFlow, {
   Background,
@@ -14,17 +14,17 @@ import ReactFlow, {
   MarkerType,
   useNodesState,
   useEdgesState,
-  addEdge,
   type Node,
   type Edge,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
+} from "reactflow";
+import "reactflow/dist/style.css";
 import { AppPage, Breadcrumbs } from "@/components/shared/page-layout";
 import { breadcrumbsFromPathname } from "@/lib/route-meta";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { apiFetchJson } from "@/lib/api-client";
 import {
   Network,
   Terminal,
@@ -33,207 +33,338 @@ import {
   Sparkles,
   Command,
   LayoutGrid,
+  Loader2,
+  RefreshCcw,
 } from "lucide-react";
 
-// 自定义节点样式建议在 globals.css 中，这里先使用 inline style
-const initialNodes: Node[] = [
-  { 
-    id: '1', 
-    position: { x: 400, y: 100 }, 
-    data: { label: '智能排班系统 (Project)' },
-    style: { background: '#2C2C2C', color: '#F9F7F2', border: '1px solid #D1CDC2', padding: '10px', borderRadius: '2px', fontWeight: 'bold' }
-  },
-  { 
-    id: '2', 
-    position: { x: 200, y: 250 }, 
-    data: { label: '张三 (Developer)' },
-    style: { background: '#FFFFFF', color: '#2C2C2C', border: '1px solid #D1CDC2', padding: '10px', borderRadius: '2px' }
-  },
-  { 
-    id: '3', 
-    position: { x: 600, y: 250 }, 
-    data: { label: 'MD5 校验模块 (Module)' },
-    style: { background: '#FFFFFF', color: '#2C2C2C', border: '1px solid #D1CDC2', padding: '10px', borderRadius: '2px' }
-  },
-  { 
-    id: '4', 
-    position: { x: 100, y: 400 }, 
-    data: { label: '负责模块: Auth' },
-    style: { background: '#F1EDE4', color: '#2C2C2C', border: '1px dotted #D1CDC2', padding: '5px', fontSize: '12px' }
-  },
-  { 
-    id: '5', 
-    position: { x: 700, y: 400 }, 
-    data: { label: '依赖系统: Redis' },
-    style: { background: '#F1EDE4', color: '#2C2C2C', border: '1px dotted #D1CDC2', padding: '5px', fontSize: '12px' }
-  },
-  { 
-    id: '6', 
-    position: { x: 500, y: 400 }, 
-    data: { label: '合规性风险 (Risk)' },
-    style: { background: '#7F1D1D', color: '#F9F7F2', border: '1px solid #7F1D1D', padding: '10px', borderRadius: '2px' }
-  },
-];
+type GraphApiNode = {
+  id: string;
+  label: string;
+  type: string;
+  position: { x: number; y: number };
+  style?: Record<string, string | number>;
+  data?: {
+    label: string;
+    entityName: string;
+    entityType: string;
+    docId?: string;
+    sectionPath?: string;
+  };
+};
 
-const initialEdges: Edge[] = [
-  { id: 'e1-2', source: '1', target: '2', label: 'member', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e1-3', source: '1', target: '3', label: 'contains', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e2-4', source: '2', target: '4', label: 'responsible_for', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e3-5', source: '3', target: '5', label: 'depends_on', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e3-6', source: '3', target: '6', label: 'has_risk', markerEnd: { type: MarkerType.ArrowClosed }, animated: true, style: { stroke: '#7F1D1D' } },
-];
+type GraphApiEdge = {
+  id: string;
+  source: string;
+  target: string;
+  label?: string;
+};
+
+type ProjectGraphResponse = {
+  project_id: string;
+  nodes: GraphApiNode[];
+  edges: GraphApiEdge[];
+  stats: { entity_count: number; relation_count: number };
+};
+
+function toFlowNodes(apiNodes: GraphApiNode[]): Node[] {
+  return apiNodes.map((n) => ({
+    id: n.id,
+    position: n.position,
+    data: { label: n.data?.label ?? n.label },
+    style: n.style,
+  }));
+}
+
+function toFlowEdges(apiEdges: GraphApiEdge[]): Edge[] {
+  return apiEdges.map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    label: e.label,
+    markerEnd: { type: MarkerType.ArrowClosed },
+    animated: e.label === "affects" || e.label === "has_risk",
+  }));
+}
 
 export default function GraphExplorerPage() {
   const searchParams = useSearchParams();
-  const projectId = searchParams.get("projectId") ?? "1";
-  const { project: projectCtx } = useProject(projectId);
-  const graphProject = projectCtx ?? fallbackProjectRecord(projectId);
+  const paramProjectId = searchParams.get("projectId");
+  const { items: projects } = useProjectList();
+  const resolvedProjectId = paramProjectId || projects[0]?.id || "";
+  const { project: projectCtx } = useProject(resolvedProjectId || undefined);
+  const graphProject = projectCtx ?? fallbackProjectRecord(resolvedProjectId || "unknown");
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [apiNodes, setApiNodes] = useState<GraphApiNode[]>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [stats, setStats] = useState({ entity_count: 0, relation_count: 0 });
+  const [loading, setLoading] = useState(false);
+  const [graphError, setGraphError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [queryResult, setQueryResult] = useState<string | null>(null);
+  const [queryLoading, setQueryLoading] = useState(false);
+  const [selected, setSelected] = useState<GraphApiNode | null>(null);
+  const [backendReady, setBackendReady] = useState(true);
 
-  const onConnect = useCallback(
-    (params: Parameters<typeof addEdge>[0]) =>
-      setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
-  );
+  const loadGraph = useCallback(async () => {
+    if (!resolvedProjectId) return;
+    setLoading(true);
+    setGraphError(null);
+    try {
+      const data = await apiFetchJson<ProjectGraphResponse>(
+        `/graph/projects/${resolvedProjectId}/graph?limit=200`
+      );
+      setNodes(toFlowNodes(data.nodes));
+      setEdges(toFlowEdges(data.edges));
+      setApiNodes(data.nodes);
+      setStats(data.stats);
+      setBackendReady(true);
+      if (data.nodes.length > 0) {
+        const first = data.nodes[0];
+        setSelected(first);
+      } else {
+        setSelected(null);
+      }
+    } catch (e) {
+      setGraphError(e instanceof Error ? e.message : "加载图谱失败");
+      setNodes([]);
+      setEdges([]);
+      setApiNodes([]);
+      setStats({ entity_count: 0, relation_count: 0 });
+      setBackendReady(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [resolvedProjectId, setNodes, setEdges]);
 
-  /** React Flow 要求父级有明确宽高；在可滚动主布局中勿仅依赖 flex-1 */
+  useEffect(() => {
+    void loadGraph();
+  }, [loadGraph]);
+
+  const runGraphQuery = useCallback(async () => {
+    if (!resolvedProjectId || !query.trim()) return;
+    setQueryLoading(true);
+    setQueryResult(null);
+    try {
+      const data = await apiFetchJson<{ result: string }>(
+        `/graph/projects/${resolvedProjectId}/query`,
+        { method: "POST", json: { query: query.trim(), mode: "text2cypher" } }
+      );
+      setQueryResult(data.result);
+    } catch (e) {
+      setQueryResult(e instanceof Error ? e.message : "查询失败");
+    } finally {
+      setQueryLoading(false);
+    }
+  }, [resolvedProjectId, query]);
+
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    const hit = apiNodes.find((n) => n.id === node.id);
+    setSelected(hit ?? null);
+  }, [apiNodes]);
+
   const miniMapNodeColor = useCallback(
     (n: Node) => (n.style?.background as string) || "#eee",
     []
   );
 
+  const neighborCount = selected
+    ? edges.filter((e) => e.source === selected.id || e.target === selected.id).length
+    : 0;
+
   return (
     <AppPage fullWidth noPadding className="min-h-0 p-0" innerClassName="space-y-0">
-    <div className="flex flex-col bg-background font-sans">
-      <div className="border-b border-border bg-white/50 px-4 py-2 backdrop-blur-sm sm:px-6 lg:px-8">
-        <Breadcrumbs items={breadcrumbsFromPathname("/graph")} />
-      </div>
-      {/* 顶部工具栏 */}
-      <div className="flex h-16 shrink-0 flex-wrap items-center justify-between gap-4 border-b border-border bg-white/50 px-4 backdrop-blur-sm sm:px-6 lg:px-8 z-10">
-        <div className="flex items-center gap-4">
-          <Network size={20} className="text-primary" />
-          <h1 className="text-xl font-bold italic tracking-tight font-serif">GraphRAG 图谱探索</h1>
-          <div className="h-4 w-px bg-border mx-2" />
-          <Link href={`/projects/${projectId}`} className="inline-flex">
-            <Badge variant="outline" className="border-primary/20 bg-primary/5 font-serif italic text-primary">
-              {graphProject.name}
-            </Badge>
-          </Link>
+      <div className="flex flex-col bg-background font-sans">
+        <div className="border-b border-border bg-white/50 px-4 py-2 backdrop-blur-sm sm:px-6 lg:px-8">
+          <Breadcrumbs items={breadcrumbsFromPathname("/graph")} />
         </div>
-        
-        {/* 图谱 NLU 查询框 */}
-        <div className="relative order-3 flex-1 basis-full group sm:order-none sm:basis-auto lg:mx-8 lg:max-w-2xl">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-primary">
-            <Command size={16} />
+
+        <div className="z-10 flex h-16 shrink-0 flex-wrap items-center justify-between gap-4 border-b border-border bg-white/50 px-4 backdrop-blur-sm sm:px-6 lg:px-8">
+          <div className="flex items-center gap-4">
+            <Network size={20} className="text-primary" />
+            <h1 className="font-serif text-xl font-bold italic tracking-tight">GraphRAG 图谱探索</h1>
+            <div className="mx-2 h-4 w-px bg-border" />
+            {resolvedProjectId ? (
+              <Link href={`/projects/${resolvedProjectId}`} className="inline-flex">
+                <Badge
+                  variant="outline"
+                  className="border-primary/20 bg-primary/5 font-serif italic text-primary"
+                >
+                  {graphProject.name}
+                </Badge>
+              </Link>
+            ) : (
+              <Badge variant="outline">请先创建项目</Badge>
+            )}
           </div>
-          <Input 
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="查询实体关系，如：谁负责 MD5 校验模块，它依赖什么？" 
-            className="pl-10 pr-24 h-10 border-border bg-white focus-visible:ring-primary shadow-sm w-full" 
-          />
-          <div className="absolute right-2 top-1.5 flex gap-1">
-             <Button size="sm" className="h-7 gap-1 text-[10px] font-bold px-2 uppercase bg-primary">
-               <Sparkles size={12} />
-               Text2Cypher
-             </Button>
+
+          <div className="group relative order-3 flex-1 basis-full sm:order-none sm:basis-auto lg:mx-8 lg:max-w-2xl">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-primary">
+              <Command size={16} />
+            </div>
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void runGraphQuery()}
+              placeholder="查询实体关系，如：谁负责 MD5 校验模块，它依赖什么？"
+              className="h-10 w-full border-border bg-white pl-10 pr-24 shadow-sm focus-visible:ring-primary"
+              disabled={!resolvedProjectId}
+            />
+            <div className="absolute right-2 top-1.5 flex gap-1">
+              <Button
+                size="sm"
+                className="h-7 gap-1 bg-primary px-2 text-[10px] font-bold uppercase"
+                onClick={() => void runGraphQuery()}
+                disabled={!resolvedProjectId || queryLoading}
+              >
+                {queryLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                Text2Cypher
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button variant="ghost" size="icon" className="h-9 w-9">
+              <LayoutGrid size={18} />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 font-serif font-bold italic"
+              onClick={() => void loadGraph()}
+              disabled={loading || !resolvedProjectId}
+            >
+              {loading ? <Loader2 size={14} className="mr-1 animate-spin" /> : <RefreshCcw size={14} className="mr-1" />}
+              同步图谱数据
+            </Button>
           </div>
         </div>
 
-        <div className="flex gap-2">
-           <Button variant="ghost" size="icon" className="h-9 w-9"><LayoutGrid size={18} /></Button>
-           <Button variant="outline" size="sm" className="h-9 font-serif italic font-bold">同步图谱数据</Button>
-        </div>
-      </div>
+        {!resolvedProjectId && (
+          <div className="px-8 py-6 text-sm text-muted-foreground">
+            请从项目页进入图谱，或先创建项目并在知识库中上传文档以触发 GraphRAG 抽取。
+          </div>
+        )}
 
-      <div
-        className="relative w-full min-h-[420px] h-[calc(100dvh-11rem)] max-h-[900px]"
-        aria-label="知识图谱画布"
-      >
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          fitView
-          className="h-full w-full bg-[#F9F7F2]"
-          proOptions={{ hideAttribution: true }}
+        {graphError && (
+          <div className="border-b border-destructive/20 bg-destructive/5 px-8 py-2 text-sm text-destructive">
+            {graphError}
+          </div>
+        )}
+
+        <div
+          className="relative h-[calc(100dvh-11rem)] min-h-[420px] max-h-[900px] w-full"
+          aria-label="知识图谱画布"
         >
-          <Background color="#E5E1D8" gap={20} size={1} />
-          <Controls className="bg-white border-border shadow-md" />
-          <MiniMap
-            className="border border-border bg-white shadow-md"
-            nodeColor={miniMapNodeColor}
-          />
-          
-          <Panel position="top-right" className="flex flex-col gap-4 max-w-[320px]">
-            {/* 实体详情面板 (模拟) */}
-            <Card className="paper-border bg-white/90 backdrop-blur shadow-lg">
-              <CardHeader className="p-4 pb-2 border-b border-border mb-4 bg-primary/5">
-                <CardTitle className="text-sm font-bold uppercase tracking-widest text-primary flex items-center gap-2">
-                  <Info size={14} />
-                  实体详情预览
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-4">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground font-sans">当前选中实体</p>
-                  <p className="text-lg font-bold italic font-serif">MD5 校验模块</p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground uppercase font-bold tracking-tighter">关联节点</span>
-                    <span className="font-bold">3 个</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground uppercase font-bold tracking-tighter">风险级别</span>
-                    <Badge variant="destructive" className="text-[9px] px-1 h-4">HIGH</Badge>
-                  </div>
-                </div>
-                <div className="pt-2 border-t border-border mt-4">
-                  <p className="text-[11px] leading-relaxed italic text-muted-foreground font-sans">
-                    “该模块负责文档上传的防篡改校验，在外部审计中具有最高优先级。”
-                  </p>
-                </div>
-                <Button size="sm" className="w-full h-8 text-xs gap-1 font-sans">
-                  在 Copilot 中分析该节点 <ChevronRight size={14} />
-                </Button>
-              </CardContent>
-            </Card>
+          {loading && nodes.length === 0 ? (
+            <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="animate-spin" size={20} />
+              正在从 Kuzu 加载图谱…
+            </div>
+          ) : (
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onNodeClick={onNodeClick}
+              fitView
+              className="h-full w-full bg-[#F9F7F2]"
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background color="#E5E1D8" gap={20} size={1} />
+              <Controls className="border-border bg-white shadow-md" />
+              <MiniMap className="border border-border bg-white shadow-md" nodeColor={miniMapNodeColor} />
 
-            {/* 系统状态面板 */}
-            <Card className="paper-border bg-white/90 backdrop-blur shadow-md">
-              <CardContent className="p-4 flex items-center gap-3">
-                 <Terminal size={16} className="text-muted-foreground" />
-                 <div className="space-y-0.5">
-                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">图谱后端状态</p>
-                   <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                      <p className="text-[10px] font-medium">Cypher Engine Ready</p>
-                   </div>
-                 </div>
-              </CardContent>
-            </Card>
-          </Panel>
-        </ReactFlow>
-      </div>
+              <Panel position="top-right" className="flex max-w-[320px] flex-col gap-4">
+                <Card className="paper-border bg-white/90 shadow-lg backdrop-blur">
+                  <CardHeader className="mb-4 border-b border-border bg-primary/5 p-4 pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-primary">
+                      <Info size={14} />
+                      实体详情
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 p-4">
+                    {selected ? (
+                      <>
+                        <div className="space-y-1">
+                          <p className="font-sans text-xs text-muted-foreground">当前选中实体</p>
+                          <p className="font-serif text-lg font-bold italic">{selected.data?.entityName ?? selected.label}</p>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-xs">
+                            <span className="font-bold uppercase tracking-tighter text-muted-foreground">关联边</span>
+                            <span className="font-bold">{neighborCount} 条</span>
+                          </div>
+                          {selected.data?.entityType && (
+                            <div className="flex justify-between text-xs">
+                              <span className="font-bold uppercase tracking-tighter text-muted-foreground">类型</span>
+                              <Badge variant="outline" className="h-4 text-[9px]">
+                                {selected.data.entityType}
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm italic text-muted-foreground">点击节点查看详情，或上传文档后同步图谱。</p>
+                    )}
+                    {queryResult && (
+                      <div className="border-t border-border pt-2">
+                        <p className="mb-1 text-[10px] font-bold uppercase text-muted-foreground">查询结果</p>
+                        <p className="whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-muted-foreground">
+                          {queryResult}
+                        </p>
+                      </div>
+                    )}
+                    {selected && resolvedProjectId && (
+                      <Button size="sm" className="h-8 w-full gap-1 font-sans text-xs" asChild>
+                        <Link href={`/copilot?projectId=${resolvedProjectId}`}>
+                          在 Copilot 中分析该节点 <ChevronRight size={14} />
+                        </Link>
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
 
-      {/* 底部属性查看器提示 (模拟) */}
-      <div className="flex h-auto min-h-10 shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-white px-4 py-2 text-[10px] font-sans uppercase tracking-widest text-muted-foreground sm:px-8">
-        <div className="flex gap-6">
-           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-sm bg-primary" /> 项目/根节点</span>
-           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-sm bg-white border border-border" /> 实体 (Person/Object)</span>
-           <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-sm bg-destructive" /> 风险节点</span>
+                <Card className="paper-border bg-white/90 shadow-md backdrop-blur">
+                  <CardContent className="flex items-center gap-3 p-4">
+                    <Terminal size={16} className="text-muted-foreground" />
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                        Kuzu 图谱引擎
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <div className={`h-1.5 w-1.5 rounded-full ${backendReady ? "bg-green-500" : "bg-amber-500"}`} />
+                        <p className="text-[10px] font-medium">
+                          {backendReady ? "Cypher Engine Ready" : "未就绪或暂无数据"}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Panel>
+            </ReactFlow>
+          )}
         </div>
-        <div className="text-left sm:text-right">
-          Graph Metadata: 124 Entities · 312 Relations · 14.2 MB Index
+
+        <div className="flex h-auto min-h-10 shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-white px-4 py-2 font-sans text-[10px] uppercase tracking-widest text-muted-foreground sm:px-8">
+          <div className="flex gap-6">
+            <span className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-sm bg-primary" /> 项目/根节点
+            </span>
+            <span className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-sm border border-border bg-white" /> 实体
+            </span>
+            <span className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-sm bg-destructive" /> 风险节点
+            </span>
+          </div>
+          <div className="text-left sm:text-right">
+            Graph Metadata: {stats.entity_count} Entities · {stats.relation_count} Relations · Kuzu
+          </div>
         </div>
       </div>
-    </div>
     </AppPage>
   );
 }

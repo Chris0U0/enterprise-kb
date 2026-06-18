@@ -64,7 +64,13 @@ export function useSearchStream() {
     if (clearSession) setSessionId(null);
   }, []);
 
-  const start = useCallback(async (query: string, projectId: string, topK = 5, useCurrentSession = true) => {
+  const start = useCallback(async (
+    query: string,
+    projectId: string,
+    topK = 5,
+    useCurrentSession = true,
+    deep = false,
+  ) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -86,6 +92,9 @@ export function useSearchStream() {
       url.searchParams.set("query", query);
       url.searchParams.set("project_id", projectId);
       url.searchParams.set("top_k", String(topK));
+      if (deep) {
+        url.searchParams.set("deep", "true");
+      }
       
       // 如果存在 sessionId 且要求使用，则带上
       if (useCurrentSession && sessionId) {

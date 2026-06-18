@@ -133,7 +133,7 @@ export default function CopilotPage() {
 
   const send = () => {
     if (!input.trim() || !resolvedProjectId) return;
-    void start(input.trim(), resolvedProjectId, complex ? 8 : 5, true);
+    void start(input.trim(), resolvedProjectId, complex ? 8 : 5, true, complex);
     setInput("");
   };
 
