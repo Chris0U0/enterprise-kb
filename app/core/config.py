@@ -103,7 +103,6 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 64
 
     # ── RAG 延迟优化 ─────────────────────────────────────
-    # 快速模式：跳过查询改写/HyDE、缩小候选集、可跳过 Reranker（Copilot 默认）
     RAG_FAST_MODE: bool = True
     RAG_FAST_CANDIDATE_COUNT: int = 25
     RAG_FAST_SKIP_RERANKER: bool = False
@@ -124,6 +123,11 @@ class Settings(BaseSettings):
     CONTEXTUAL_RETRIEVAL_ENABLED: bool = True
     CONTEXTUAL_BATCH_SIZE: int = 5
     CONTEXTUAL_MAX_CONCURRENT: int = 3
+
+    # ── 文档入库管道 ─────────────────────────────────────
+    # True：转换后立即基础向量化（可检索），GraphRAG/Contextual 走独立 Celery 任务
+    PIPELINE_FAST_INDEX_FIRST: bool = True
+    CELERY_PRELOAD_EMBEDDING: bool = True
 
     # ── Phase 2: Streaming ───────────────────────────────
     SSE_KEEPALIVE_SECONDS: int = 15
