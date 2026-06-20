@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.services.llm import stream_chat_chunks
 from app.models.database import ChatSession, ChatMessage
+from app.services.evaluation.qa_audit import record_qa_and_schedule_eval
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -102,12 +103,14 @@ async def stream_agentic_rag(
     db: AsyncSession,
     session_id: Optional[uuid.UUID] = None,
     top_k: int = 5,
+    deep: bool = False,
 ) -> AsyncGenerator[str, None]:
     """
     流式 Agentic RAG (支持持久化与多轮对话)
     """
     start_time = time.time()
-    
+    yield _sse_event("step", {"phase": "starting", "message": "正在处理您的问题..."})
+
     # 1. 自动处理 Session
     if not session_id:
         session = ChatSession(
@@ -120,10 +123,9 @@ async def stream_agentic_rag(
         await db.refresh(session)
         session_id = session.id
         yield _sse_event("session_id", {"id": str(session_id)})
-    
-    # 2. 获取历史上下文并保存用户消息
+
+    # 2. 获取历史上下文（用户消息延后写入，避免阻塞首包）
     history = await get_chat_context(session_id, db)
-    await save_chat_message(session_id, "user", query, db)
 
     from app.services.agentic.graph import get_agentic_graph
     from app.services.agentic.state import AgenticState, TIMEOUT_SECONDS
@@ -133,7 +135,8 @@ async def stream_agentic_rag(
         "original_query": query,
         "project_id": project_id,
         "top_k": top_k,
-        "chat_history": history, # 注入历史
+        "deep": deep,
+        "chat_history": history,
         "plan": [],
         "current_step": 0,
         "retrieved_contexts": [],
@@ -147,9 +150,10 @@ async def stream_agentic_rag(
         "should_continue": True,
         "error": "",
     }
-    
+
     compiled = get_agentic_graph()
-    yield _sse_event("step", {"phase": "starting", "message": "正在分析您的问题..."})
+
+    await save_chat_message(session_id, "user", query, db)
 
     prev_step = -1
     final_state = initial_state
@@ -223,6 +227,21 @@ async def stream_agentic_rag(
     plan = final_state.get("plan", [])
     completed = sum(1 for s in plan if s.get("status") == "completed")
 
+    await record_qa_and_schedule_eval(
+        project_id=project_id,
+        user_id=user_id,
+        query=query,
+        answer=answer,
+        contexts=contexts,
+        strategy="agentic_rag_stream",
+        latency_ms=total_ms,
+        extra={
+            "steps_executed": completed,
+            "llm_calls": final_state.get("llm_call_count", 0),
+            "session_id": str(session_id),
+        },
+    )
+
     yield _sse_event("done", {
         "status": "completed",
         "steps_executed": completed,
@@ -245,9 +264,11 @@ async def stream_search_response(
     db: AsyncSession,
     session_id: Optional[uuid.UUID] = None,
     top_k: int = 5,
+    deep: bool = False,
 ) -> AsyncGenerator[str, None]:
     """流式标准 RAG — 支持持久化与多轮对话"""
     start_time = time.time()
+    yield _sse_event("step", {"phase": "starting", "message": "正在处理您的问题..."})
 
     # 1. 自动处理 Session
     if not session_id:
@@ -261,10 +282,9 @@ async def stream_search_response(
         await db.refresh(session)
         session_id = session.id
         yield _sse_event("session_id", {"id": str(session_id)})
-    
-    # 2. 获取历史上下文并保存用户消息
+
+    # 2. 获取历史上下文（用户消息在检索完成后再写入）
     history = await get_chat_context(session_id, db)
-    await save_chat_message(session_id, "user", query, db)
 
     yield _sse_event("step", {"phase": "retrieving", "message": "正在检索相关文档..."})
 
@@ -272,12 +292,27 @@ async def stream_search_response(
     from app.services.retrieval.citation import build_citation, build_llm_context
 
     searcher = get_searcher()
-    results = await searcher.search(query=query, project_id=project_id, top_k=top_k)
+    results = await searcher.search(
+        query=query, project_id=project_id, top_k=top_k, deep=deep
+    )
+
+    await save_chat_message(session_id, "user", query, db)
 
     if not results:
         no_res_msg = "根据现有文档未找到与您问题相关的信息。"
         yield _sse_event("chunk", {"text": no_res_msg})
         await save_chat_message(session_id, "assistant", no_res_msg, db)
+        total_ms = (time.time() - start_time) * 1000
+        await record_qa_and_schedule_eval(
+            project_id=project_id,
+            user_id=user_id,
+            query=query,
+            answer=no_res_msg,
+            contexts=[],
+            strategy="vector_rag_stream",
+            latency_ms=total_ms,
+            extra={"session_id": str(session_id), "result_count": 0},
+        )
         yield _sse_event("done", {"status": "no_results"})
         return
 
@@ -325,6 +360,21 @@ async def stream_search_response(
         await save_chat_message(session_id, "assistant", full_answer, db, citations=citations_data)
 
     total_ms = (time.time() - start_time) * 1000
+    context_snippets = [r.content_snippet for r in results if r.content_snippet]
+    await record_qa_and_schedule_eval(
+        project_id=project_id,
+        user_id=user_id,
+        query=query,
+        answer=full_answer,
+        contexts=context_snippets,
+        strategy="vector_rag_stream",
+        latency_ms=total_ms,
+        extra={
+            "session_id": str(session_id),
+            "result_count": len(results),
+        },
+    )
+
     yield _sse_event("done", {
         "status": "completed",
         "total_duration_ms": round(total_ms, 2),

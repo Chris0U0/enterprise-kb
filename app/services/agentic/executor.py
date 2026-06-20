@@ -52,7 +52,10 @@ async def executor_node(state: AgenticState) -> dict:
     try:
         if action == "retrieve":
             result, sources, confidence = await _execute_retrieve(
-                query, state["project_id"], state.get("top_k", 5)
+                query,
+                state["project_id"],
+                state.get("top_k", 5),
+                deep=state.get("deep", False),
             )
         elif action in ("analyze", "compare", "summarize"):
             result, sources, confidence = await _execute_analysis(
@@ -117,12 +120,16 @@ async def executor_node(state: AgenticState) -> dict:
     }
 
 
-async def _execute_retrieve(query: str, project_id: str, top_k: int) -> tuple[str, list[dict], float]:
+async def _execute_retrieve(
+    query: str, project_id: str, top_k: int, *, deep: bool = False
+) -> tuple[str, list[dict], float]:
     """执行检索动作"""
     from app.services.retrieval.searcher import get_searcher
 
     searcher = get_searcher()
-    results = await searcher.search(query=query, project_id=project_id, top_k=top_k)
+    results = await searcher.search(
+        query=query, project_id=project_id, top_k=top_k, deep=deep
+    )
 
     if not results:
         return "未检索到相关信息", [], 0.3

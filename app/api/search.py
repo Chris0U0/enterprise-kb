@@ -21,7 +21,7 @@ from app.services.retrieval.router import route_query, RetrievalStrategy
 from app.services.retrieval.searcher import get_searcher
 from app.services.llm import complete_chat
 from app.services.retrieval.citation import build_citation, build_llm_context, generate_cited_answer
-from app.models.database import AuditLog
+from app.services.evaluation.qa_audit import record_qa_and_schedule_eval
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -57,9 +57,9 @@ async def search(
 
     # 根据策略执行
     if strategy == RetrievalStrategy.MULTI_AGENT:
-        return await _multi_agent_search(request, db, start_time)
+        return await _multi_agent_search(request, db, start_time, user)
     elif strategy == RetrievalStrategy.AGENTIC_RAG:
-        return await _agentic_search(request, db, start_time)
+        return await _agentic_search(request, db, start_time, user)
     elif strategy == RetrievalStrategy.GRAPH_ENHANCED:
         results, citations = await _graph_enhanced_search(request, db)
     elif strategy == RetrievalStrategy.MCP_TOOL:
@@ -88,30 +88,22 @@ async def search(
 
     latency_ms = (time.time() - start_time) * 1000
 
-    # Step 11: 审计日志（记录 answer+contexts 供 RAGAS 评估使用）
     context_snippets = [r.content[:300] for r in results]
-    db.add(AuditLog(
-        event_type="qa_query",
+    from app.services.evaluation.qa_audit import record_qa_and_schedule_eval
+
+    await record_qa_and_schedule_eval(
         project_id=request.project_id,
-        payload={
-            "query": request.query,
-            "answer": answer[:2000],
-            "contexts": context_snippets,
-            "strategy": strategy.value,
+        user_id=user.id,
+        query=request.query,
+        answer=answer,
+        contexts=context_snippets,
+        strategy=strategy.value,
+        latency_ms=latency_ms,
+        extra={
             "result_count": len(results),
-            "latency_ms": round(latency_ms, 2),
             "cited_docs": [str(c.doc_id) for c in citations],
         },
-    ))
-
-    # Phase 3: RAGAS 在线抽样评估（异步，不阻塞响应）
-    if getattr(settings, "RAGAS_ENABLED", False):
-        import asyncio
-        from app.services.evaluation.scheduler import evaluate_single_query
-        asyncio.create_task(evaluate_single_query(
-            query=request.query, answer=answer, contexts=context_snippets,
-            project_id=str(request.project_id),
-        ))
+    )
 
     return SearchResponse(
         query=request.query,
@@ -132,7 +124,8 @@ async def search_stream(
     query: str = Query(..., min_length=1, max_length=2000),
     project_id: uuid.UUID = Query(...),
     top_k: int = Query(default=5, ge=1, le=20),
-    session_id: uuid.UUID | None = Query(default=None), # 新增 session_id 支持
+    session_id: uuid.UUID | None = Query(default=None),
+    deep: bool = Query(default=False, description="深度检索：启用查询改写/HyDE 与完整候选集"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -149,21 +142,23 @@ async def search_stream(
 
     if strategy == RetrievalStrategy.AGENTIC_RAG:
         generator = stream_agentic_rag(
-            query=query, 
-            project_id=project_id_str, 
+            query=query,
+            project_id=project_id_str,
             user_id=user.id,
             db=db,
             session_id=session_id,
-            top_k=top_k
+            top_k=top_k,
+            deep=deep,
         )
     else:
         generator = stream_search_response(
-            query=query, 
-            project_id=project_id_str, 
+            query=query,
+            project_id=project_id_str,
             user_id=user.id,
             db=db,
             session_id=session_id,
-            top_k=top_k
+            top_k=top_k,
+            deep=deep,
         )
 
     return StreamingResponse(
@@ -250,7 +245,9 @@ async def list_skills(_user: User = Depends(get_current_user)):
 # 内部方法
 # ══════════════════════════════════════════════════════════
 
-async def _agentic_search(request: SearchRequest, db: AsyncSession, start_time: float) -> SearchResponse:
+async def _agentic_search(
+    request: SearchRequest, db: AsyncSession, start_time: float, user: User
+) -> SearchResponse:
     """Agentic RAG 路径"""
     from app.services.agentic.graph import run_agentic_rag
     from app.models.schemas import CitationSource
@@ -270,25 +267,28 @@ async def _agentic_search(request: SearchRequest, db: AsyncSession, start_time: 
             pass
 
     latency_ms = (time.time() - start_time) * 1000
+    answer = result.get("answer", "")
 
-    # 审计
-    db.add(AuditLog(
-        event_type="qa_query",
+    from app.services.evaluation.qa_audit import record_qa_and_schedule_eval
+
+    await record_qa_and_schedule_eval(
         project_id=request.project_id,
-        payload={
-            "query": request.query,
-            "strategy": "agentic_rag",
+        user_id=user.id,
+        query=request.query,
+        answer=answer,
+        contexts=result.get("retrieved_contexts", []),
+        strategy="agentic_rag",
+        latency_ms=latency_ms,
+        extra={
             "steps_executed": result.get("steps_executed", 0),
             "llm_calls": result.get("llm_calls", 0),
             "confidence": result.get("confidence", 0),
-            "latency_ms": round(latency_ms, 2),
-            "traces": result.get("traces", []),
         },
-    ))
+    )
 
     return SearchResponse(
         query=request.query,
-        answer=result.get("answer", ""),
+        answer=answer,
         citations=citations,
         results=[],
         retrieval_method="agentic_rag",
@@ -296,7 +296,9 @@ async def _agentic_search(request: SearchRequest, db: AsyncSession, start_time: 
     )
 
 
-async def _multi_agent_search(request: SearchRequest, db: AsyncSession, start_time: float) -> SearchResponse:
+async def _multi_agent_search(
+    request: SearchRequest, db: AsyncSession, start_time: float, user: User
+) -> SearchResponse:
     """Phase 3: Multi-Agent 四 Agent 协作路径"""
     from app.services.agents.graph import run_multi_agent
     from app.models.schemas import CitationSource
@@ -316,30 +318,22 @@ async def _multi_agent_search(request: SearchRequest, db: AsyncSession, start_ti
 
     latency_ms = (time.time() - start_time) * 1000
     answer = result.get("answer", "")
+    context_snippets = [str(c.content_snippet)[:300] for c in citations if c.content_snippet]
 
-    db.add(AuditLog(
-        event_type="qa_query",
+    from app.services.evaluation.qa_audit import record_qa_and_schedule_eval
+
+    await record_qa_and_schedule_eval(
         project_id=request.project_id,
-        payload={
-            "query": request.query,
-            "answer": answer[:2000],
-            "contexts": [str(c.content_snippet)[:300] for c in citations],
-            "strategy": "multi_agent",
+        user_id=user.id,
+        query=request.query,
+        answer=answer,
+        contexts=context_snippets,
+        strategy="multi_agent",
+        latency_ms=latency_ms,
+        extra={
             "total_tokens": result.get("total_tokens", 0),
-            "latency_ms": round(latency_ms, 2),
-            "traces": result.get("traces", []),
         },
-    ))
-
-    # RAGAS 在线抽样
-    if getattr(settings, "RAGAS_ENABLED", False):
-        import asyncio
-        from app.services.evaluation.scheduler import evaluate_single_query
-        asyncio.create_task(evaluate_single_query(
-            query=request.query, answer=answer,
-            contexts=[str(c.content_snippet)[:300] for c in citations],
-            project_id=str(request.project_id),
-        ))
+    )
 
     return SearchResponse(
         query=request.query,

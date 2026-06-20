@@ -103,8 +103,11 @@ async def complete_chat(
     *,
     system: str | None = None,
     max_tokens: int = 2048,
+    model: str | None = None,
 ) -> str:
-    text, _ = await complete_chat_with_usage(prompt, system=system, max_tokens=max_tokens)
+    text, _ = await complete_chat_with_usage(
+        prompt, system=system, max_tokens=max_tokens, model=model
+    )
     return text
 
 
@@ -114,12 +117,14 @@ async def complete_chat_with_usage(
     system: str | None = None,
     history: list[dict[str, str]] | None = None,
     max_tokens: int = 2048,
+    model: str | None = None,
 ) -> tuple[str, int]:
     """
     非流式补全，返回 (文本, token 用量合计)。
     """
     if is_openai_compat_provider():
         client = _openai_client()
+        chat_model = (model or "").strip() or settings.OPENAI_MODEL
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -127,7 +132,7 @@ async def complete_chat_with_usage(
             messages.extend(history)
         messages.append({"role": "user", "content": prompt})
         resp = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
+            model=chat_model,
             messages=messages,
             max_tokens=max_tokens,
         )
@@ -137,13 +142,14 @@ async def complete_chat_with_usage(
         return text, total
 
     client = _anthropic_client()
+    anthropic_model = (model or "").strip() or settings.ANTHROPIC_MODEL
     messages_anthropic = []
     if history:
         messages_anthropic.extend(history)
     messages_anthropic.append({"role": "user", "content": prompt})
     
     kwargs: dict = {
-        "model": settings.ANTHROPIC_MODEL,
+        "model": anthropic_model,
         "max_tokens": max_tokens,
         "messages": messages_anthropic,
     }

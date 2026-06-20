@@ -1,5 +1,5 @@
 """
-GraphRAG API — 实体浏览 / 关系查询 / 子图可视化
+GraphRAG API — 实体浏览 / 关系查询 / 子图可视化（Kuzu）
 """
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import uuid
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_project_admin, require_project_editor, require_project_member
@@ -18,6 +19,45 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 router = APIRouter(prefix="/graph", tags=["GraphRAG"])
+
+
+class GraphQueryBody(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2000)
+    mode: str = Field(default="text2cypher", description="text2cypher | nl")
+
+
+@router.get("/projects/{project_id}/graph")
+async def get_project_graph(
+    project_id: uuid.UUID,
+    limit: int = Query(default=200, ge=1, le=500),
+    entity_types: str | None = Query(default=None, description="逗号分隔实体类型过滤"),
+    _: tuple = Depends(require_project_member),
+):
+    """拉取项目子图（React Flow nodes / edges）。"""
+    _check_enabled()
+    from app.services.graph.store import get_graph_store
+
+    type_list = [t.strip() for t in entity_types.split(",")] if entity_types else None
+    store = get_graph_store()
+    return store.get_project_subgraph(str(project_id), limit=limit, entity_types=type_list)
+
+
+@router.post("/projects/{project_id}/query")
+async def post_project_graph_query(
+    project_id: uuid.UUID,
+    body: GraphQueryBody,
+    _: tuple = Depends(require_project_member),
+):
+    """自然语言图查询（Text2Cypher + 模板查询）。"""
+    _check_enabled()
+    from app.services.graph.query import query_graph
+
+    result = await query_graph(body.query, str(project_id))
+    return {
+        "query": body.query,
+        "mode": body.mode,
+        "result": result or "未找到相关图谱信息",
+    }
 
 
 @router.get("/entities/{project_id}")
@@ -58,7 +98,7 @@ async def graph_query(
     project_id: uuid.UUID = Query(...),
     _: tuple = Depends(require_project_member),
 ):
-    """自然语言图查询"""
+    """自然语言图查询（GET 兼容旧调用）"""
     _check_enabled()
     from app.services.graph.query import query_graph
     result = await query_graph(query, str(project_id))
@@ -78,11 +118,10 @@ async def trigger_extraction(
     """手动触发单个文档的实体关系抽取"""
     _check_enabled()
     from sqlalchemy import select
-    from app.models.database import Document, DocSection
+    from app.models.database import DocSection
     from app.services.graph.extractor import batch_extract
     from app.services.graph.store import get_graph_store
 
-    # 获取文档章节
     result = await db.execute(
         select(DocSection)
         .where(DocSection.doc_id == doc_id, DocSection.project_id == project_id)

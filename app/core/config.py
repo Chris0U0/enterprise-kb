@@ -111,6 +111,17 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 64
 
+    # ── RAG 延迟优化 ─────────────────────────────────────
+    RAG_FAST_MODE: bool = True
+    RAG_FAST_CANDIDATE_COUNT: int = 25
+    RAG_FAST_SKIP_RERANKER: bool = False
+    # 深度模式（?deep=true 或 RAG_FAST_MODE=false 时生效）
+    RAG_QUERY_REFINE: bool = True
+    RAG_USE_HYDE: bool = True
+    RAG_SKIP_RERANKER: bool = False
+    # 检索增强 LLM（改写/HyDE）；空则与 OPENAI_MODEL 相同，建议填 qwen-turbo
+    OPENAI_RETRIEVAL_MODEL: str = ""
+
     # ── Phase 2: Agentic RAG ────────────────────────────
     AGENTIC_MAX_STEPS: int = 4
     AGENTIC_MAX_LLM_CALLS: int = 8
@@ -121,6 +132,11 @@ class Settings(BaseSettings):
     CONTEXTUAL_RETRIEVAL_ENABLED: bool = True
     CONTEXTUAL_BATCH_SIZE: int = 5
     CONTEXTUAL_MAX_CONCURRENT: int = 3
+
+    # ── 文档入库管道 ─────────────────────────────────────
+    # True：转换后立即基础向量化（可检索），GraphRAG/Contextual 走独立 Celery 任务
+    PIPELINE_FAST_INDEX_FIRST: bool = True
+    CELERY_PRELOAD_EMBEDDING: bool = True
 
     # ── Phase 2: Streaming ───────────────────────────────
     SSE_KEEPALIVE_SECONDS: int = 15
@@ -133,7 +149,7 @@ class Settings(BaseSettings):
     # ── Phase 3: GraphRAG ────────────────────────────────
     GRAPHRAG_ENABLED: bool = True
     GRAPHRAG_DOC_THRESHOLD: int = 30
-    KUZU_DB_PATH: str = "/data/kuzu_db"
+    KUZU_DB_PATH: str = "./data/kuzu_db"
 
     # ── Phase 3: RAGAS Evaluation ────────────────────────
     RAGAS_ENABLED: bool = True
@@ -150,6 +166,12 @@ class Settings(BaseSettings):
 
     def cors_allow_credentials(self) -> bool:
         return self.cors_origin_list() != ["*"]
+
+    def retrieval_llm_model(self) -> str:
+        """查询改写 / HyDE 使用的模型（可与主回答模型不同）。"""
+        if (self.LLM_PROVIDER or "").lower().strip() == "openai_compat":
+            return (self.OPENAI_RETRIEVAL_MODEL or "").strip() or self.OPENAI_MODEL
+        return self.ANTHROPIC_MODEL
 
 
 @lru_cache()

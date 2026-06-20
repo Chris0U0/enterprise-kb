@@ -16,6 +16,7 @@ async def convert_word(file_data: bytes, filename: str) -> tuple[str, int | None
     Word (.docx/.doc) → Markdown
     Returns: (markdown_text, page_count)
     """
+    tmp_path = ""
     try:
         from markitdown import MarkItDown
 
@@ -27,13 +28,14 @@ async def convert_word(file_data: bytes, filename: str) -> tuple[str, int | None
         result = mid.convert(tmp_path)
         md_text = result.text_content
 
-        # Word 没有天然的页码概念，page_count 设为 None
         page_count = _estimate_word_pages(md_text)
-
         return md_text, page_count
 
     except ImportError:
         logger.warning("markitdown 未安装，回退到 python-docx")
+        return await _convert_word_fallback(file_data, filename)
+    except Exception as e:
+        logger.warning("markitdown Word 转换失败 (%s)，回退到 python-docx", e)
         return await _convert_word_fallback(file_data, filename)
     finally:
         try:
@@ -91,6 +93,7 @@ async def convert_ppt(file_data: bytes, filename: str) -> tuple[str, int | None]
     PPT (.pptx/.ppt) → Markdown
     每页转为一个 Markdown 章节
     """
+    tmp_path = ""
     try:
         from markitdown import MarkItDown
 
@@ -102,12 +105,14 @@ async def convert_ppt(file_data: bytes, filename: str) -> tuple[str, int | None]
         result = mid.convert(tmp_path)
         md_text = result.text_content
 
-        # 计算幻灯片数
         slide_count = md_text.count("# ") + md_text.count("## Slide")
         return md_text, max(slide_count, 1)
 
     except ImportError:
         logger.warning("markitdown 未安装，回退到 python-pptx")
+        return await _convert_ppt_fallback(file_data, filename)
+    except Exception as e:
+        logger.warning("markitdown PPT 转换失败 (%s)，回退到 python-pptx", e)
         return await _convert_ppt_fallback(file_data, filename)
     finally:
         try:

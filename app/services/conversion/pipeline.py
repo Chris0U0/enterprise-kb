@@ -198,27 +198,8 @@ async def process_document(
             },
         ))
 
-        # Step 8 (Phase 3): GraphRAG 实体关系抽取
-        if getattr(settings, "GRAPHRAG_ENABLED", False):
-            try:
-                from app.services.graph.extractor import batch_extract
-                from app.services.graph.store import get_graph_store
-
-                store = get_graph_store()
-                # 尝试获取该项目已有的本体（如果已有文档，则复用本体，保证一致性）
-                project_schema = store.get_project_schema(project_id_str)
-                schema = project_schema if project_schema["entities"] else None
-
-                entities, relations = await batch_extract(sections, doc_id_str, schema=schema)
-                if entities or relations:
-                    store.add_entities(entities, project_id_str)
-                    store.add_relations(relations, project_id_str)
-                    logger.info(f"GraphRAG: {len(entities)} 实体, {len(relations)} 关系 (doc: {filename})")
-            except Exception as e:
-                logger.warning(f"GraphRAG 抽取跳过: {e}")
-
         await db.flush()
-        logger.info(f"文档处理完成: {filename} → {len(sections)} sections, {page_count} pages")
+        logger.info(f"文档转换完成: {filename} → {len(sections)} sections, {page_count} pages")
         return full_markdown, artifacts
 
     except Exception as e:

@@ -46,7 +46,8 @@ torch>=2.1.0
 # Document conversion
 pymupdf4llm==0.0.17
 pymupdf==1.25.1
-markitdown==0.1.1
+markitdown[docx]==0.1.1
+mammoth>=1.8.0
 pandas==2.2.3
 openpyxl==3.1.5
 python-docx==1.1.2
@@ -60,7 +61,7 @@ marker-pdf==1.6.2
 
 # Auth (JWT)
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+bcrypt>=4.0.1,<6
 
 # Utilities
 pydantic==2.10.3

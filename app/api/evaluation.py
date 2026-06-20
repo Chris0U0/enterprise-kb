@@ -35,6 +35,8 @@ async def trigger_evaluation(
 
     result = await schedule_daily_evaluation(
         project_id=str(project_id) if project_id else None,
+        hours=hours,
+        max_samples=max_samples,
     )
 
     if result is None:

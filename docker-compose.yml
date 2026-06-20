@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
     # 宿主机用 5433，避免与本机 Windows 服务 postgres.exe（默认占 5432）冲突；应用 .env 须 POSTGRES_PORT=5433
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01_init.sql

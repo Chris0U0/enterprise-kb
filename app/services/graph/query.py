@@ -132,10 +132,6 @@ async def _entity_centric_search(query: str, project_id: str, store) -> str:
         logger.warning(f"实体中心化搜索失败: {e}")
         return ""
 
-    except Exception as e:
-        logger.warning(f"GraphRAG 查询失败: {e}")
-        return ""
-
 
 def _try_template_query(query: str, project_id: str, store) -> str:
     """基于关键词的模板查询（不需要 LLM）"""

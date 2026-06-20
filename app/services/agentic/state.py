@@ -65,7 +65,8 @@ class AgenticState(TypedDict):
     original_query: str
     project_id: str
     top_k: int
-    chat_history: list[dict] | None  # 新增：多轮对话历史
+    deep: bool
+    chat_history: list[dict] | None  # 多轮对话历史
 
     # 计划
     plan: list[dict]             # PlanStep 序列化列表
