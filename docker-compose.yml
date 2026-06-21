@@ -7,7 +7,7 @@ services:
       POSTGRES_DB: enterprise_kb
       POSTGRES_USER: kb_admin
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-    # 避免与本机已安装的 PostgreSQL（常见占用 5432）冲突，导致连错库且中文错误信息触发 psycopg2 解码异常
+    # 宿主机用 5433，避免与本机 Windows 服务 postgres.exe（默认占 5432）冲突；应用 .env 须 POSTGRES_PORT=5433
     ports:
       - "5434:5432"
     volumes:
@@ -72,7 +72,7 @@ services:
   #   celery -A app.core.celery_app worker --loglevel=info --concurrency=2
   # 需要每日 RAGAS 评估定时任务时本机:
   #   celery -A app.core.celery_app beat --loglevel=info
-  # .env 中需将 POSTGRES_* / REDIS_* / QDRANT_* / MINIO_* 指向 localhost 与 compose 映射端口（如 PG 5433）。
+  # .env 中需将 POSTGRES_* / REDIS_* / QDRANT_* / MINIO_* 指向 127.0.0.1 与 compose 映射端口（PG 宿主机端口见 postgres.ports）。
 
 volumes:
   pgdata:

@@ -29,7 +29,7 @@ export default function AgentOrchestrationPage() {
   const [activeTab, setActiveTab] = useState('prompt');
   
   const [prompt, setPrompt] = useState(
-    "你是一个专门为企业内部研发人员提供支持的 AI Copilot。你的回答必须严格基于上下文中的知识库文档。如果遇到不确定的内容，请明确告知用户并引用相关的原文路径。你的语气应当专业且严谨，优先展示代码片段和架构图关联。"
+    "你是一个专门为企业内部研发人员提供支持的 AI 助手。你的回答必须严格基于上下文中的知识库文档。如果遇到不确定的内容，请明确告知用户并引用相关的原文路径。你的语气应当专业且严谨，优先展示代码片段和架构图关联。"
   );
 
   const [skills, setSkills] = useState([

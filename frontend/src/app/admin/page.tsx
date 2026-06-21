@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { AppPage, PageHeader } from "@/components/shared/page-layout";
 import { breadcrumbsFromPathname } from "@/lib/route-meta";
@@ -10,8 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { apiFetchJson } from "@/lib/api-client";
-import { format } from "date-fns";
 import { 
   Settings, 
   ShieldCheck, 
@@ -23,112 +21,44 @@ import {
   FileSearch, 
   Activity,
   AlertTriangle,
-  ChevronRight,
-  ChevronDown,
   Database,
   ArrowUpRight,
   Zap,
   Lock,
   Terminal,
-  ArrowRight,
   RefreshCcw,
-  Loader2
+  CheckCircle2,
+  Clock
 } from "lucide-react";
 
-interface AuditLog {
-  id: string;
-  event_type: string;
-  user_id: string;
-  project_id?: string;
-  payload: any;
-  created_at: string;
-  ip_address?: string;
-}
+// ──────────────────────────────────────────────────────────────────────────────
+// 演示专用：高质量硬编码数据 (Demo Only)
+// ──────────────────────────────────────────────────────────────────────────────
 
-interface EvaluationRun {
-  run_id: string;
-  run_type: string;
-  dataset_size: number;
-  faithfulness: number;
-  relevancy: number;
-  recall: number;
-  created_at: string;
-}
+const DEMO_AUDIT_LOGS = [
+  { id: "1", user: "admin@enterprise.ai", action: "文档上传", resource: "2024Q3财报分析.pdf", status: "success", time: "2026-04-22 14:30", ip: "192.168.1.102" },
+  { id: "2", user: "system", action: "RAGAS 评估", resource: "Batch #1029 (Daily)", status: "success", time: "2026-04-22 12:00", ip: "internal" },
+  { id: "3", user: "zhang-san@dev", action: "API Key 创建", resource: "Production-Key-01", status: "success", time: "2026-04-22 11:15", ip: "10.0.4.22" },
+  { id: "4", user: "li-si@hr", action: "问答检索", resource: "“公司带薪年假政策”", status: "success", time: "2026-04-22 10:45", ip: "172.16.8.9" },
+  { id: "5", user: "system", action: "图谱抽取", resource: "Doc: 员工手册.md", status: "success", time: "2026-04-22 09:30", ip: "internal" },
+  { id: "6", user: "admin@enterprise.ai", action: "配置变更", resource: "GRAPHRAG_ENABLED -> true", status: "success", time: "2026-04-21 18:20", ip: "192.168.1.102" },
+  { id: "7", user: "wang-wu@mkt", action: "问答检索", resource: "“竞品分析报告对比”", status: "warning", time: "2026-04-21 16:40", ip: "192.168.1.55" },
+];
+
+const DEMO_EVAL_RUNS = [
+  { id: "run_8f2a1b", size: 50, faith: 0.942, rel: 0.885, recall: 0.821, time: "04-22 12:00" },
+  { id: "run_7c3d9e", size: 45, faith: 0.915, rel: 0.872, recall: 0.795, time: "04-21 12:00" },
+  { id: "run_6b2f4a", size: 50, faith: 0.882, rel: 0.854, recall: 0.812, time: "04-20 12:00" },
+  { id: "run_5a1e3d", size: 48, faith: 0.895, rel: 0.841, recall: 0.788, time: "04-19 12:00" },
+  { id: "run_4d9c2b", size: 50, faith: 0.921, rel: 0.892, recall: 0.834, time: "04-18 12:00" },
+  { id: "run_3b8f1a", size: 42, faith: 0.864, rel: 0.822, recall: 0.756, time: "04-17 12:00" },
+  { id: "run_2e7d0c", size: 50, faith: 0.875, rel: 0.835, recall: 0.772, time: "04-16 12:00" },
+];
+
+// ──────────────────────────────────────────────────────────────────────────────
 
 export default function AdminConsolePage() {
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [evaluationRuns, setEvaluationRuns] = useState<EvaluationRun[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const fetchData = async () => {
-    setRefreshing(true);
-    try {
-      const [logs, evalHistory] = await Promise.all([
-        apiFetchJson<AuditLog[]>("/evaluation/logs?limit=20"),
-        apiFetchJson<{ total: number, runs: EvaluationRun[] }>("/evaluation/history?limit=10")
-      ]);
-      setAuditLogs(logs);
-      setEvaluationRuns(evalHistory.runs);
-    } catch (err) {
-      console.error("Failed to fetch admin data", err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const latestRun = evaluationRuns[0];
-  
-  const ragasMetrics = [
-    { 
-      name: "Faithfulness (忠实度)", 
-      value: latestRun?.faithfulness ?? 0, 
-      status: (latestRun?.faithfulness ?? 0) > 0.8 ? "excellent" : (latestRun?.faithfulness ?? 0) > 0.6 ? "good" : "average" 
-    },
-    { 
-      name: "Answer Relevancy (答案相关度)", 
-      value: latestRun?.relevancy ?? 0, 
-      status: (latestRun?.relevancy ?? 0) > 0.8 ? "excellent" : (latestRun?.relevancy ?? 0) > 0.6 ? "good" : "average" 
-    },
-    { 
-      name: "Context Recall (上下文召回率)", 
-      value: latestRun?.recall ?? 0, 
-      status: (latestRun?.recall ?? 0) > 0.8 ? "excellent" : (latestRun?.recall ?? 0) > 0.6 ? "good" : "average" 
-    },
-  ];
-
-  const getActionLabel = (eventType: string, payload: any) => {
-    switch (eventType) {
-      case "document_uploaded": return "文档上传";
-      case "qa_query": return "问答检索";
-      case "evaluation_run": return "RAGAS 评估";
-      case "project_created": return "创建项目";
-      default: return eventType;
-    }
-  };
-
-  const getResourceLabel = (eventType: string, payload: any) => {
-    if (!payload) return "-";
-    if (payload.filename) return payload.filename;
-    if (payload.query) return payload.query;
-    if (payload.run_id) return `Run: ${payload.run_id.slice(0, 8)}`;
-    return JSON.stringify(payload).slice(0, 30);
-  };
-
-  if (loading) {
-    return (
-      <AppPage surface="canvas">
-        <div className="flex h-[60vh] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
-        </div>
-      </AppPage>
-    );
-  }
+  const latest = DEMO_EVAL_RUNS[0];
 
   return (
     <AppPage surface="canvas">
@@ -137,294 +67,234 @@ export default function AdminConsolePage() {
         description="管理员控制台：监控系统健康度、评估 AI 质量并追踪审计流水。"
         breadcrumbs={breadcrumbsFromPathname("/admin")}
         actions={
-          <div className="flex items-center gap-3">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={fetchData} 
-              disabled={refreshing}
-              className="font-serif italic gap-2 h-8"
-            >
-              {refreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
-              刷新数据
-            </Button>
-            <Badge
-              variant="outline"
-              className="border-primary/20 bg-primary/5 py-1 font-serif text-sm italic text-primary"
-            >
-              Admin Privilege Enabled
-            </Badge>
-          </div>
+          <Badge
+            variant="outline"
+            className="border-primary/20 bg-primary/5 py-1 font-serif text-sm italic text-primary"
+          >
+            Admin Privilege Enabled
+          </Badge>
         }
       />
 
-        <Tabs defaultValue="audit" className="w-full">
-          <TabsList className="bg-transparent border-b border-border w-full justify-start rounded-none h-auto p-0 gap-10">
-            <TabsTrigger value="audit" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none py-3 font-serif italic text-lg px-0 flex gap-2 items-center">
-              <FileSearch size={18} /> 审计追踪
-            </TabsTrigger>
-            <TabsTrigger value="ragas" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none py-3 font-serif italic text-lg px-0 flex gap-2 items-center">
-              <BarChart3 size={18} /> RAGAS 评估大盘
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none py-3 font-serif italic text-lg px-0 flex gap-2 items-center">
-              <Settings size={18} /> 全局配置
-            </TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue="ragas" className="w-full">
+        <TabsList className="bg-transparent border-b border-border w-full justify-start rounded-none h-auto p-0 gap-10">
+          <TabsTrigger value="audit" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none py-3 font-serif italic text-lg px-0 flex gap-2 items-center">
+            <FileSearch size={18} /> 审计追踪
+          </TabsTrigger>
+          <TabsTrigger value="ragas" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none py-3 font-serif italic text-lg px-0 flex gap-2 items-center">
+            <BarChart3 size={18} /> RAGAS 评估大盘
+          </TabsTrigger>
+          <TabsTrigger value="settings" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none py-3 font-serif italic text-lg px-0 flex gap-2 items-center">
+            <Settings size={18} /> 全局配置
+          </TabsTrigger>
+        </TabsList>
 
-          {/* 1. 审计追踪查询 */}
-          <TabsContent value="audit" className="mt-8 space-y-6">
-            <Card className="paper-border">
-              <CardHeader className="pb-0">
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <CardTitle className="text-base font-serif italic">审计流水 (audit_logs)</CardTitle>
-                    <CardDescription>记录全量用户操作，支持 MD5 哈希校验追溯。</CardDescription>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="h-9 gap-2"><Search size={14} /> 搜索</Button>
-                    <Button variant="outline" size="sm" className="h-9">导出 CSV</Button>
-                  </div>
+        {/* 1. 审计追踪查询 */}
+        <TabsContent value="audit" className="mt-8 space-y-6">
+          <Card className="paper-border">
+            <CardHeader className="pb-0">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <CardTitle className="text-base font-serif italic">审计流水 (audit_logs)</CardTitle>
+                  <CardDescription>记录全量用户操作，支持 MD5 哈希校验追溯。</CardDescription>
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <ScrollArea className="max-h-[600px]">
-                  <table className="w-full text-left text-sm border-collapse">
-                    <thead className="bg-muted/50 text-muted-foreground uppercase text-[10px] font-bold tracking-widest border-y border-border sticky top-0 z-10">
-                      <tr>
-                        <th className="px-6 py-4">操作员</th>
-                        <th className="px-6 py-4">动作 / 资源</th>
-                        <th className="px-6 py-4">状态</th>
-                        <th className="px-6 py-4">时间</th>
-                        <th className="px-6 py-4">IP 地址</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border font-sans">
-                      {auditLogs.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="px-6 py-20 text-center text-muted-foreground italic font-serif">
-                            暂无审计记录
-                          </td>
-                        </tr>
-                      ) : (
-                        auditLogs.map(log => (
-                          <tr key={log.id} className="hover:bg-muted/30 transition-colors">
-                            <td className="px-6 py-4 font-medium max-w-[150px] truncate">{log.user_id}</td>
-                            <td className="px-6 py-4 flex flex-col gap-0.5">
-                               <span className="font-bold text-xs">{getActionLabel(log.event_type, log.payload)}</span>
-                               <span className="text-[10px] text-muted-foreground italic font-serif truncate w-60">{getResourceLabel(log.event_type, log.payload)}</span>
-                            </td>
-                            <td className="px-6 py-4">
-                               <Badge variant="secondary" className="bg-green-100 text-green-700 text-[9px] font-bold px-1.5 h-4 border-none">
-                                 SUCCESS
-                               </Badge>
-                            </td>
-                            <td className="px-6 py-4 text-muted-foreground text-[10px] font-bold uppercase tracking-tighter">
-                              {log.created_at ? format(new Date(log.created_at), "yyyy-MM-dd HH:mm:ss") : "-"}
-                            </td>
-                            <td className="px-6 py-4 text-muted-foreground font-mono text-xs opacity-60">
-                              {log.ip_address || "internal"}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="h-9 gap-2"><Search size={14} /> 搜索</Button>
+                  <Button variant="outline" size="sm" className="h-9">导出 CSV</Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead className="bg-muted/50 text-muted-foreground uppercase text-[10px] font-bold tracking-widest border-y border-border">
+                  <tr>
+                    <th className="px-6 py-4">操作员</th>
+                    <th className="px-6 py-4">动作 / 资源</th>
+                    <th className="px-6 py-4">状态</th>
+                    <th className="px-6 py-4">时间</th>
+                    <th className="px-6 py-4">IP 地址</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border font-sans">
+                  {DEMO_AUDIT_LOGS.map(log => (
+                    <tr key={log.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-6 py-4 font-medium">{log.user}</td>
+                      <td className="px-6 py-4 flex flex-col gap-0.5">
+                         <span className="font-bold text-xs">{log.action}</span>
+                         <span className="text-[10px] text-muted-foreground italic font-serif truncate w-60">{log.resource}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                         <Badge variant={log.status === 'success' ? 'secondary' : 'outline'} className={cn(
+                           "text-[9px] font-bold px-1.5 h-4 border-none",
+                           log.status === 'success' ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                         )}>
+                           {log.status.toUpperCase()}
+                         </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-muted-foreground text-[10px] font-bold uppercase tracking-tighter">{log.time}</td>
+                      <td className="px-6 py-4 text-muted-foreground font-mono text-xs opacity-60">{log.ip}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          {/* 2. RAGAS 评估大盘 */}
-          <TabsContent value="ragas" className="mt-8 space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {ragasMetrics.map(metric => (
-                <Card key={metric.name} className="paper-border">
-                   <CardHeader className="p-6 pb-2">
-                      <div className="flex justify-between items-start mb-4">
-                        <Badge variant="outline" className={cn(
-                          "text-[9px] font-bold uppercase border-none",
-                          metric.status === 'excellent' ? "bg-green-100 text-green-700" : 
-                          metric.status === 'good' ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"
-                        )}>
-                          {metric.status}
-                        </Badge>
-                        <Zap size={16} className={cn(
-                          "transition-colors",
-                          metric.status === 'excellent' ? "text-green-500/40" : 
-                          metric.status === 'good' ? "text-blue-500/40" : "text-yellow-500/40"
-                        )} />
-                      </div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold font-sans">{metric.name}</p>
-                   </CardHeader>
-                   <CardContent className="p-6 pt-0">
-                      <div className="flex items-baseline gap-2 mb-4">
-                        <span className="text-4xl font-bold font-serif italic tracking-tighter">
-                          {evaluationRuns.length > 0 ? (metric.value * 100).toFixed(0) : "--"}
-                        </span>
-                        <span className="text-sm font-bold opacity-30">%</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className={cn(
-                            "h-full transition-all duration-700",
-                            metric.status === 'excellent' ? "bg-green-500" : 
-                            metric.status === 'good' ? "bg-blue-500" : "bg-yellow-500"
-                          )}
-                          style={{ width: `${evaluationRuns.length > 0 ? metric.value * 100 : 0}%` }}
-                        />
-                      </div>
-                   </CardContent>
-                </Card>
-              ))}
-            </div>
+        {/* 2. RAGAS 评估大盘 */}
+        <TabsContent value="ragas" className="mt-8 space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <MetricCard name="Faithfulness (忠实度)" value={latest.faith} status="excellent" />
+            <MetricCard name="Answer Relevancy (答案相关度)" value={latest.rel} status="excellent" />
+            <MetricCard name="Context Recall (上下文召回)" value={latest.recall} status="good" />
+          </div>
 
-            <Card className="paper-border min-h-[400px] flex flex-col">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <Card className="paper-border col-span-2">
               <CardHeader className="flex flex-row items-center justify-between border-b border-border pb-4 bg-muted/20">
                 <div className="space-y-1">
-                  <CardTitle className="text-base font-serif italic">评估运行历史 (Evaluation History)</CardTitle>
-                  <CardDescription>最近 10 次 RAGAS 评估的详细得分情况。</CardDescription>
+                  <CardTitle className="text-base font-serif italic">评估质量趋势图 (Evaluation Timeline)</CardTitle>
+                  <CardDescription>近 7 天 RAGAS 核心指标波动变化。</CardDescription>
                 </div>
-                <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-tighter opacity-60">
-                  <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-green-500" /> Faithfulness</span>
-                  <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" /> Relevancy</span>
+                <div className="flex gap-4">
+                  <TrendLegend color="bg-green-500" label="Faithfulness" />
+                  <TrendLegend color="bg-blue-500" label="Relevancy" />
                 </div>
               </CardHeader>
-              <CardContent className="p-0">
-                {evaluationRuns.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 space-y-4 opacity-40">
-                    <Activity size={48} className="animate-pulse" />
-                    <p className="text-sm italic font-serif">暂无评估数据，请触发检索后自动生成采样</p>
+              <CardContent className="p-8 h-[280px] flex items-end justify-between gap-2">
+                {/* 简易手绘感趋势图占位 */}
+                {DEMO_EVAL_RUNS.slice().reverse().map((run, i) => (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
+                    <div className="w-full flex justify-center gap-1 h-40 items-end">
+                      <div className="w-2 bg-green-500/80 rounded-t-sm transition-all group-hover:bg-green-500" style={{ height: `${run.faith * 100}%` }} />
+                      <div className="w-2 bg-blue-500/80 rounded-t-sm transition-all group-hover:bg-blue-500" style={{ height: `${run.rel * 100}%` }} />
+                    </div>
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter">{run.time.split(' ')[0]}</span>
                   </div>
-                ) : (
-                  <table className="w-full text-left text-sm border-collapse">
-                    <thead className="bg-muted/50 text-muted-foreground uppercase text-[10px] font-bold tracking-widest border-y border-border">
-                      <tr>
-                        <th className="px-6 py-3">Run ID</th>
-                        <th className="px-6 py-3">样本数</th>
-                        <th className="px-6 py-3">Faithfulness</th>
-                        <th className="px-6 py-3">Relevancy</th>
-                        <th className="px-6 py-3">Recall</th>
-                        <th className="px-6 py-3">时间</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border font-sans">
-                      {evaluationRuns.map(run => (
-                        <tr key={run.run_id} className="hover:bg-muted/30 transition-colors">
-                          <td className="px-6 py-3 font-mono text-xs text-primary">{run.run_id.slice(0, 8)}</td>
-                          <td className="px-6 py-3 font-bold">{run.dataset_size}</td>
-                          <td className="px-6 py-3">
-                            <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50 font-bold">
-                              {(run.faithfulness * 100).toFixed(1)}%
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-3">
-                            <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 font-bold">
-                              {(run.relevancy * 100).toFixed(1)}%
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-3">
-                            <Badge variant="outline" className="border-yellow-200 text-yellow-700 bg-yellow-50 font-bold">
-                              {(run.recall * 100).toFixed(1)}%
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-3 text-muted-foreground text-[10px] font-bold uppercase tracking-tighter">
-                            {format(new Date(run.created_at), "MM-dd HH:mm")}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                ))}
               </CardContent>
             </Card>
-          </TabsContent>
 
-          {/* 3. 全局配置 */}
-          <TabsContent value="settings" className="mt-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <AdminLinkCard 
-                title="页面 A：入库审批" 
-                desc="核心文档人工核验流水" 
-                href="/admin/approval" 
-                icon={<ShieldCheck size={24} />} 
-              />
-              <AdminLinkCard 
-                title="页面 B：指令编排" 
-                desc="Agent 提示词与工具管理" 
-                href="/admin/agent" 
-                icon={<Terminal size={24} />} 
-              />
-              <AdminLinkCard 
-                title="页面 C：资源配额" 
-                desc="部门存储与 Token 计费" 
-                href="/admin/resource" 
-                icon={<Database size={24} />} 
-              />
-              <AdminLinkCard 
-                title="页面 D：合规脱敏" 
-                desc="PII 识别与异常行为审计" 
-                href="/admin/security" 
-                icon={<Lock size={24} />} 
-              />
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
-              <Card className="paper-border">
-                <CardHeader>
-                  <CardTitle className="text-base font-serif italic">安全与合规配置</CardTitle>
-                  <CardDescription>配置审计日志保留期限与不可变哈希策略。</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                   <div className="flex items-center justify-between p-4 bg-muted/20 rounded-lg">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-bold">不可变日志策略</p>
-                        <p className="text-[10px] text-muted-foreground">启用后日志将通过内容寻址哈希锁定，禁止任何形式的物理删除。</p>
-                      </div>
-                      <Badge className="bg-green-100 text-green-700 border-none uppercase text-[9px]">Active</Badge>
-                   </div>
-                   <div className="flex items-center justify-between p-4 bg-muted/20 rounded-lg">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-bold">Retention Period</p>
-                        <p className="text-[10px] text-muted-foreground">审计日志在系统中保留的最长期限。</p>
-                      </div>
-                      <span className="font-serif italic font-bold">365 Days</span>
-                   </div>
-                </CardContent>
-              </Card>
+            <Card className="paper-border">
+              <CardHeader>
+                <CardTitle className="text-base font-serif italic">健康度诊断</CardTitle>
+                <CardDescription>当前系统运行风险评估</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-green-50 rounded-lg border border-green-100 flex gap-3">
+                  <CheckCircle2 className="text-green-600" size={18} />
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-green-800">忠实度表现极佳</p>
+                    <p className="text-[10px] text-green-700/80">当前系统回答完全基于上下文，未发现明显的幻觉风险。</p>
+                  </div>
+                </div>
+                <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-100 flex gap-3">
+                  <AlertTriangle className="text-yellow-600" size={18} />
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-yellow-800">召回率仍有优化空间</p>
+                    <p className="text-[10px] text-yellow-700/80">部分复杂查询未能完全覆盖所有知识点，建议增加 Chunk 重叠度。</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-              <Card className="paper-border">
-                <CardHeader>
-                  <CardTitle className="text-base font-serif italic">系统健康度概览</CardTitle>
-                  <CardDescription>核心依赖服务的实时运行状态。</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                   <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-green-500" />
-                      <span className="text-sm font-bold flex-1">PostgreSQL Database</span>
-                      <span className="text-[10px] font-mono opacity-40">Connected</span>
-                   </div>
-                   <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-green-500" />
-                      <span className="text-sm font-bold flex-1">Qdrant Vector DB</span>
-                      <span className="text-[10px] font-mono opacity-40">Cluster Healthy</span>
-                   </div>
-                   <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-green-500" />
-                      <span className="text-sm font-bold flex-1">MinIO Object Storage</span>
-                      <span className="text-[10px] font-mono opacity-40">99.9% Uptime</span>
-                   </div>
-                   <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
-                      <span className="text-sm font-bold flex-1">RAGAS Evaluator</span>
-                      <span className="text-[10px] font-mono opacity-40">Processing Samples...</span>
-                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
+          <Card className="paper-border">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base font-serif italic">评估运行历史 (Evaluation History)</CardTitle>
+              <CardDescription>最近 7 次 RAGAS 自动/手动评估详细得分。</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead className="bg-muted/50 text-muted-foreground uppercase text-[10px] font-bold tracking-widest border-y border-border">
+                  <tr>
+                    <th className="px-6 py-4">评估 ID</th>
+                    <th className="px-6 py-4">样本规模</th>
+                    <th className="px-6 py-4">Faithfulness</th>
+                    <th className="px-6 py-4">Relevancy</th>
+                    <th className="px-6 py-4">Recall</th>
+                    <th className="px-6 py-4">执行时间</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border font-sans">
+                  {DEMO_EVAL_RUNS.map(run => (
+                    <tr key={run.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-6 py-4 font-mono text-xs text-primary">{run.id}</td>
+                      <td className="px-6 py-4 font-bold">{run.size} samples</td>
+                      <td className="px-6 py-4">
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">{(run.faith * 100).toFixed(1)}%</Badge>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{(run.rel * 100).toFixed(1)}%</Badge>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">{(run.recall * 100).toFixed(1)}%</Badge>
+                      </td>
+                      <td className="px-6 py-4 text-muted-foreground text-[10px] font-bold uppercase tracking-tighter">{run.time}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        </Tabs>
+        {/* 3. 全局配置 */}
+        <TabsContent value="settings" className="mt-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <AdminLinkCard title="入库审批" desc="核心文档人工核验流水" href="#" icon={<ShieldCheck size={24} />} />
+            <AdminLinkCard title="指令编排" desc="Agent 提示词与工具管理" href="#" icon={<Terminal size={24} />} />
+            <AdminLinkCard title="资源配额" desc="部门存储与 Token 计费" href="#" icon={<Database size={24} />} />
+            <AdminLinkCard title="合规脱敏" desc="PII 识别与异常行为审计" href="#" icon={<Lock size={24} />} />
+          </div>
+        </TabsContent>
+      </Tabs>
     </AppPage>
+  );
+}
+
+function MetricCard({ name, value, status }: { name: string, value: number, status: string }) {
+  return (
+    <Card className="paper-border">
+      <CardHeader className="p-6 pb-2">
+        <div className="flex justify-between items-start mb-4">
+          <Badge variant="outline" className={cn(
+            "text-[9px] font-bold uppercase border-none",
+            status === 'excellent' ? "bg-green-100 text-green-700" : 
+            status === 'good' ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700"
+          )}>
+            {status}
+          </Badge>
+          <Zap size={16} className="text-primary/20" />
+        </div>
+        <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold font-sans">{name}</p>
+      </CardHeader>
+      <CardContent className="p-6 pt-0">
+        <div className="flex items-baseline gap-2 mb-4">
+          <span className="text-4xl font-bold font-serif italic tracking-tighter">{(value * 100).toFixed(0)}</span>
+          <span className="text-sm font-bold opacity-30">%</span>
+        </div>
+        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+          <div 
+            className={cn(
+              "h-full transition-all duration-700",
+              status === 'excellent' ? "bg-green-500" : 
+              status === 'good' ? "bg-blue-500" : "bg-yellow-500"
+            )}
+            style={{ width: `${value * 100}%` }}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TrendLegend({ color, label }: { color: string, label: string }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tighter opacity-60">
+      <div className={cn("w-2 h-2 rounded-full", color)} />
+      {label}
+    </div>
   );
 }
 

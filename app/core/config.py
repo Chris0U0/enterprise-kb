@@ -28,11 +28,20 @@ class Settings(BaseSettings):
     DEFAULT_ORG_ID: str = "00000000-0000-0000-0000-000000000001"
 
     # ── PostgreSQL ───────────────────────────────────────
-    POSTGRES_HOST: str = "localhost"
-    POSTGRES_PORT: int = 5432
+    # 默认 127.0.0.1：Windows + Docker 端口映射时避免 localhost→IPv6；配合梯子 TUN 时在客户端设直连
+    POSTGRES_HOST: str = "127.0.0.1"
+    # 与 docker-compose 宿主机映射一致；本机若未装独立 PostgreSQL 可改回 5432 并同步 compose 端口
+    POSTGRES_PORT: int = 5433
     POSTGRES_DB: str = "enterprise_kb"
     POSTGRES_USER: str = "kb_admin"
     POSTGRES_PASSWORD: str = "changeme"
+    # asyncpg 建连超时（秒）；瞬时断网 / 容器重启时过短易失败，过长拖慢故障感知
+    POSTGRES_CONNECT_TIMEOUT: int = 15
+    # 定期回收池连接，减轻「VPN 闪断、Docker 网络、服务端 idle 断开」后的陈旧连接问题
+    POSTGRES_POOL_RECYCLE: int = 1800
+    # 应用启动时探测 PostgreSQL 的重试次数与间隔（仅打日志，不阻止启动）
+    POSTGRES_STARTUP_CONNECT_ATTEMPTS: int = 5
+    POSTGRES_STARTUP_RETRY_DELAY_SEC: float = 0.6
 
     def _postgres_url(self, drivername: str) -> URL:
         """用 URL.create 传参，避免手写 URL 在 Windows/特殊字符下触发编码错误。"""
