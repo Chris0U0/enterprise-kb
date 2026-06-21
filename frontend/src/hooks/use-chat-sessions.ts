@@ -61,26 +61,26 @@ export function useChatMessages(sessionId: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchMessages = useCallback(async () => {
     if (!sessionId) {
       setMessages([]);
       return;
     }
-    let cancelled = false;
     setLoading(true);
     setError(null);
-    void (async () => {
-      try {
-        const data = await apiFetchJson<ChatMessage[]>(`/chat/sessions/${sessionId}/messages`);
-        if (!cancelled) setMessages(data);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "加载历史消息失败");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    try {
+      const data = await apiFetchJson<ChatMessage[]>(`/chat/sessions/${sessionId}/messages`);
+      setMessages(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "加载历史消息失败");
+    } finally {
+      setLoading(false);
+    }
   }, [sessionId]);
 
-  return { messages, setMessages, loading, error };
+  useEffect(() => {
+    void fetchMessages();
+  }, [fetchMessages]);
+
+  return { messages, setMessages, loading, error, refetch: fetchMessages };
 }

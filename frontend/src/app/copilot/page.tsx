@@ -56,19 +56,22 @@ export default function CopilotPage() {
   
   const { project: meta } = useProject(resolvedProjectId || undefined);
 
-  // 切换项目处理
-  const handleSwitchProject = (id: string) => {
-    setSelectedProjectId(id);
-    setSessionId(null); // 切换项目时清空当前会话
-    router.replace(`/copilot?projectId=${id}`);
-  };
   const { sessions, refetch: refetchSessions, deleteSession } = useChatSessions(resolvedProjectId);
 
-  const { steps, running, answer, error, citationLabels, start, sessionId, setSessionId, citations } = useSearchStream();
-  const { messages: historyMessages, setMessages: setHistoryMessages, loading: loadingHistory } = useChatMessages(sessionId);
+  const { steps, running, answer, error, citationLabels, start, reset, sessionId, setSessionId, citations } = useSearchStream();
+  const { messages: historyMessages, loading: loadingHistory, refetch: refetchMessages } = useChatMessages(sessionId);
 
   const [input, setInput] = useState("");
   const [complex, setComplex] = useState(false);
+  const [pendingQuery, setPendingQuery] = useState<string | null>(null);
+  const prevRunningRef = useRef(false);
+
+  const handleSwitchProject = (id: string) => {
+    setSelectedProjectId(id);
+    reset(true);
+    setPendingQuery(null);
+    router.replace(`/copilot?projectId=${id}`);
+  };
 
   // 右侧预览状态
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
@@ -87,15 +90,19 @@ export default function CopilotPage() {
         scrollContainer.scrollTop = scrollContainer.scrollHeight;
       }
     }
-  }, [answer, historyMessages, running]);
+  }, [answer, historyMessages, running, pendingQuery]);
 
-  // 当回答结束时，更新侧边栏
+  // 流式结束后：从后端拉取完整历史，并清空流式临时状态
   useEffect(() => {
-    if (!running && answer && sessionId) {
+    const justFinished = prevRunningRef.current && !running;
+    prevRunningRef.current = running;
+    if (justFinished && sessionId) {
       void refetchSessions();
-      // 这里可以考虑手动同步 historyMessages，或者依赖 useChatMessages 的自动加载
+      void refetchMessages();
+      reset(false);
+      setPendingQuery(null);
     }
-  }, [running, answer, sessionId, refetchSessions]);
+  }, [running, sessionId, refetchSessions, refetchMessages, reset]);
 
   // 当点击引用时触发
   const handleCitationClick = (docId: string) => {
@@ -132,15 +139,31 @@ export default function CopilotPage() {
   }, [citations, activeDocId]);
 
   const send = () => {
-    if (!input.trim() || !resolvedProjectId) return;
-    void start(input.trim(), resolvedProjectId, complex ? 8 : 5, true, complex);
+    if (!input.trim() || !resolvedProjectId || running) return;
+    const query = input.trim();
+    setPendingQuery(query);
     setInput("");
+    void start(query, resolvedProjectId, complex ? 8 : 5, true, complex);
+  };
+
+  const handleSelectSession = (id: string) => {
+    reset(false);
+    setPendingQuery(null);
+    setSessionId(id);
+  };
+
+  const handleDeleteSession = (id: string) => {
+    void deleteSession(id);
+    if (sessionId === id) {
+      reset(true);
+      setPendingQuery(null);
+    }
   };
 
   // 开启新对话
   const handleNewChat = () => {
-    setSessionId(null);
-    setHistoryMessages([]);
+    reset(true);
+    setPendingQuery(null);
   };
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -224,24 +247,34 @@ export default function CopilotPage() {
               </Button>
               <ScrollArea className="flex-1 -mx-2 px-2">
                 <div className="space-y-1">
-                  {sessions.map((s) => (
-                    <div 
-                      key={s.id}
-                      className={cn(
-                        "group flex items-center justify-between rounded-sm px-3 py-2 text-xs transition-colors cursor-pointer",
-                        sessionId === s.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                      )}
-                      onClick={() => setSessionId(s.id)}
-                    >
-                      <span className="truncate flex-1 mr-2">{s.title}</span>
-                      <button 
-                        className="opacity-0 group-hover:opacity-100 hover:text-destructive"
-                        onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
+                  {sessions.length === 0 ? (
+                    <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">
+                      暂无历史对话
+                    </p>
+                  ) : (
+                    sessions.map((s) => (
+                      <div
+                        key={s.id}
+                        className={cn(
+                          "group flex items-center justify-between rounded-sm px-3 py-2 text-xs transition-colors cursor-pointer",
+                          sessionId === s.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                        )}
+                        onClick={() => handleSelectSession(s.id)}
                       >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
+                        <span className="truncate flex-1 mr-2">{s.title}</span>
+                        <button
+                          type="button"
+                          className="opacity-0 group-hover:opacity-100 hover:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteSession(s.id);
+                          }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </ScrollArea>
             </div>
@@ -258,6 +291,13 @@ export default function CopilotPage() {
 
               <ScrollArea className="flex-1 pr-4 font-sans leading-relaxed">
                 <div className="space-y-8 pb-4" ref={scrollRef}>
+                  {loadingHistory && historyMessages.length === 0 && sessionId ? (
+                    <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                      <Loader2 size={16} className="mr-2 animate-spin" />
+                      加载历史消息...
+                    </div>
+                  ) : null}
+
                   {/* 渲染历史消息 */}
                   {historyMessages.map((msg, idx) => (
                     <div 
@@ -288,6 +328,13 @@ export default function CopilotPage() {
                     </div>
                   ))}
 
+                  {/* 当前轮次用户提问（流式完成前尚未写入 historyMessages） */}
+                  {pendingQuery && (
+                    <div className="group relative ml-8 border border-border bg-secondary/30 p-4 shadow-sm">
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed">{pendingQuery}</div>
+                    </div>
+                  )}
+
                   {/* 当前正在生成的消息 */}
                   {(answer || error || (running && !answer)) && (
                     <div className="paper-shadow group relative border border-border bg-white p-6 shadow-sm mr-8">
@@ -314,7 +361,7 @@ export default function CopilotPage() {
                     </div>
                   )}
 
-                  {!sessionId && !running && historyMessages.length === 0 && (
+                  {!sessionId && !running && !pendingQuery && historyMessages.length === 0 && !answer && (
                     <div className="flex flex-col items-center justify-center h-[300px] text-center space-y-4 opacity-40">
                       <BookOpen size={48} className="text-muted-foreground" />
                       <div className="space-y-1">

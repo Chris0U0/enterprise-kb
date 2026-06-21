@@ -147,6 +147,9 @@ export function useSearchStream() {
               setError(typeof data.message === "string" ? data.message : "流式检索失败");
             } else if (type === "done") {
               setSteps((prev) => prev.map((s) => ({ ...s, status: "done" })));
+              if (typeof data.session_id === "string") {
+                setSessionId((prev) => prev ?? (data.session_id as string));
+              }
             }
           } catch (err) {
             console.error("Parse SSE data error:", err, dataText);
