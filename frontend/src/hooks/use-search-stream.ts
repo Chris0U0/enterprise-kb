@@ -10,6 +10,13 @@ export type StreamStep = {
   status: "pending" | "active" | "done";
 };
 
+export type ThinkingTrace = {
+  stepId: string | number;
+  thought: string;
+  action?: string;
+  query?: string;
+};
+
 type CitationEvent = {
   doc_id?: string;
   doc_name?: string;
@@ -24,6 +31,7 @@ type StreamRun = {
   running: boolean;
   answer: string;
   steps: StreamStep[];
+  thinkingTraces: ThinkingTrace[];
   error: string | null;
   citations: CitationEvent[];
   pendingQuery: string;
@@ -34,6 +42,7 @@ type DisplayState = {
   running: boolean;
   answer: string;
   steps: StreamStep[];
+  thinkingTraces: ThinkingTrace[];
   error: string | null;
   citations: CitationEvent[];
   pendingQuery: string | null;
@@ -52,6 +61,7 @@ const emptyDisplay: DisplayState = {
   running: false,
   answer: "",
   steps: [],
+  thinkingTraces: [],
   error: null,
   citations: [],
   pendingQuery: null,
@@ -81,6 +91,7 @@ function streamToDisplay(stream: StreamRun): DisplayState {
     running: stream.running,
     answer: stream.answer,
     steps: stream.steps,
+    thinkingTraces: stream.thinkingTraces,
     error: stream.error,
     citations: stream.citations,
     pendingQuery: stream.pendingQuery,
@@ -276,6 +287,7 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
         running: true,
         answer: "",
         steps: [],
+        thinkingTraces: [],
         error: null,
         citations: [],
         pendingQuery: query,
@@ -351,6 +363,20 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
               } else if (type === "step" && typeof data.phase === "string") {
                 const s = streamsRef.current.get(currentKey) ?? streamsRef.current.get(streamKey);
                 if (s) patchStream(s.key, { steps: upsertStep(s.steps, data.phase as string) });
+              } else if (type === "thinking") {
+                const s = streamsRef.current.get(currentKey) ?? streamsRef.current.get(streamKey);
+                if (s) {
+                  const trace: ThinkingTrace = {
+                    stepId:
+                      typeof data.step_id === "number" || typeof data.step_id === "string"
+                        ? data.step_id
+                        : s.thinkingTraces.length + 1,
+                    thought: typeof data.thought === "string" ? data.thought : "",
+                    action: typeof data.action === "string" ? data.action : undefined,
+                    query: typeof data.query === "string" ? data.query : undefined,
+                  };
+                  patchStream(s.key, { thinkingTraces: [...s.thinkingTraces, trace] });
+                }
               } else if (type === "chunk" && typeof data.text === "string") {
                 const s = streamsRef.current.get(currentKey) ?? streamsRef.current.get(streamKey);
                 if (s) patchStream(s.key, { answer: s.answer + (data.text as string) });
@@ -419,6 +445,7 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
     running: display.running,
     answer: display.answer,
     steps: display.steps,
+    thinkingTraces: display.thinkingTraces,
     error: display.error,
     citations: display.citations,
     pendingQuery: display.pendingQuery,

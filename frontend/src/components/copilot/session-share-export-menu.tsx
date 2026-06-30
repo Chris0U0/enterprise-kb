@@ -13,12 +13,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Download, Share2, Link2, Check, Loader2, X } from "lucide-react";
+import { Download, Share2, Link2, Check, Loader2, X, Settings2 } from "lucide-react";
 import {
   buildShareUrl,
   createSessionShare,
   downloadSessionExport,
 } from "@/lib/chat-export-share";
+import { ShareManageDialog } from "@/components/copilot/share-manage-dialog";
 
 const EXPIRY_OPTIONS = [
   { label: "1 天", days: 1 },
@@ -37,6 +38,7 @@ export function SessionShareExportMenu({ sessionId, disabled }: SessionShareExpo
   const [exporting, setExporting] = useState<"md" | "json" | null>(null);
   const [sharing, setSharing] = useState(false);
   const [configureOpen, setConfigureOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
   const [expiresInDays, setExpiresInDays] = useState(7);
   const [shareUrl, setShareUrl] = useState("");
@@ -110,8 +112,14 @@ export function SessionShareExportMenu({ sessionId, disabled }: SessionShareExpo
             <Share2 size={14} className="mr-2" />
             创建分享链接
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setManageOpen(true)}>
+            <Settings2 size={14} className="mr-2" />
+            管理分享链接
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <ShareManageDialog sessionId={sessionId} open={manageOpen} onOpenChange={setManageOpen} />
 
       {error ? <span className="text-xs text-destructive">{error}</span> : null}
 

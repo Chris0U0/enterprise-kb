@@ -49,6 +49,10 @@ class EditMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=8000)
 
 
+class RenameSessionRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+
+
 class MessageFeedbackRequest(BaseModel):
     rating: Optional[Literal["up", "down"]] = None
 
@@ -194,6 +198,33 @@ async def get_chat_messages(
     )
     msg_result = await db.execute(msg_query)
     return msg_result.scalars().all()
+
+
+@router.patch("/sessions/{session_id}", response_model=ChatSessionSchema)
+async def rename_chat_session(
+    session_id: uuid.UUID,
+    body: RenameSessionRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """重命名对话会话"""
+    query = select(ChatSession).where(ChatSession.id == session_id)
+    result = await db.execute(query)
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    if session.user_id != user.id:
+        raise HTTPException(status_code=403, detail="无权修改他人的会话")
+
+    await ensure_project_member(session.project_id, user, db)
+
+    session.title = body.title.strip()
+    session.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(session)
+    return session
 
 
 @router.delete("/sessions/{session_id}")

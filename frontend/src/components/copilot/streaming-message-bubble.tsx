@@ -43,7 +43,11 @@ export function StreamingMessageBubble({
 
         <div className="rounded-lg border border-border bg-white px-4 py-3 shadow-sm">
           {answer ? (
-            <MarkdownContent content={answer} />
+            running ? (
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{answer}</pre>
+            ) : (
+              <MarkdownContent content={answer} />
+            )
           ) : running ? (
             <div className="rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground animate-pulse">
               AI 正在思考并检索相关文档...

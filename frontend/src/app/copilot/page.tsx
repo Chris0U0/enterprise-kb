@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { AppPage, PageHeader } from "@/components/shared/page-layout";
@@ -8,14 +8,16 @@ import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Search, Send, FileText, Loader2, Plus, X, ChevronDown, Square, User } from "lucide-react";
+import { BookOpen, Search, FileText, Loader2, ChevronDown, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/hooks/use-project";
 import { useProjectList } from "@/hooks/use-project-list";
 import { useSearchStream } from "@/hooks/use-search-stream";
 import { SearchProgressPanel } from "@/components/copilot/search-progress-panel";
+import { ThinkingProgressPanel } from "@/components/copilot/thinking-progress-panel";
+import { SessionSidebar } from "@/components/copilot/session-sidebar";
+import { CopilotChatInput } from "@/components/copilot/copilot-chat-input";
 import { ChatMessageBubble } from "@/components/copilot/chat-message-bubble";
 import { SessionShareExportMenu } from "@/components/copilot/session-share-export-menu";
 import { StreamingMessageBubble } from "@/components/copilot/streaming-message-bubble";
@@ -67,7 +69,7 @@ export default function CopilotPage() {
   const urlInitializedRef = useRef(false);
 
   const { project: meta } = useProject(resolvedProjectId || undefined);
-  const { sessions, refetch: refetchSessions, deleteSession } = useChatSessions(resolvedProjectId);
+  const { sessions, refetch: refetchSessions, deleteSession, renameSession } = useChatSessions(resolvedProjectId);
   const {
     messages: historyMessages,
     loading: loadingHistory,
@@ -92,6 +94,7 @@ export default function CopilotPage() {
 
   const {
     steps,
+    thinkingTraces,
     running,
     answer,
     error,
@@ -112,6 +115,13 @@ export default function CopilotPage() {
 
   const [input, setInput] = useState("");
   const [complex, setComplex] = useState(false);
+  const [sessionQuery, setSessionQuery] = useState("");
+
+  const filteredSessions = useMemo(() => {
+    const q = sessionQuery.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter((s) => s.title.toLowerCase().includes(q));
+  }, [sessions, sessionQuery]);
 
   const syncUrl = useCallback(
     (projectId: string, sessionId: string | null) => {
@@ -278,6 +288,10 @@ export default function CopilotPage() {
     setActiveSessionId(null);
   };
 
+  const handleRenameSession = async (id: string, title: string) => {
+    await renameSession(id, title);
+  };
+
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   return (
@@ -351,49 +365,17 @@ export default function CopilotPage() {
       <div className="flex min-h-[min(100dvh,920px)] flex-1 flex-col lg:min-h-[calc(100dvh-12rem)]">
         <ResizablePanelGroup orientation="horizontal" className="min-h-[560px] flex-1">
           <ResizablePanel defaultSize={15} minSize={10} className="border-r border-border bg-muted/10">
-            <div className="flex h-full flex-col p-4">
-              <Button
-                variant="outline"
-                className="mb-4 w-full justify-start gap-2 border-dashed"
-                onClick={handleNewChat}
-              >
-                <Plus size={16} />
-                开启新对话
-              </Button>
-              <ScrollArea className="flex-1 -mx-2 px-2">
-                <div className="space-y-1">
-                  {sessions.length === 0 ? (
-                    <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">暂无历史对话</p>
-                  ) : (
-                    sessions.map((s) => (
-                      <div
-                        key={s.id}
-                        className={cn(
-                          "group flex items-center justify-between rounded-sm px-3 py-2 text-xs transition-colors cursor-pointer",
-                          activeSessionId === s.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                        )}
-                        onClick={() => handleSelectSession(s.id)}
-                      >
-                        <span className="truncate flex-1 mr-2">{s.title}</span>
-                        {isSessionStreaming(s.id) && (
-                          <Loader2 size={12} className="mr-1 shrink-0 animate-spin opacity-70" />
-                        )}
-                        <button
-                          type="button"
-                          className="opacity-0 group-hover:opacity-100 hover:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteSession(s.id);
-                          }}
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-            </div>
+            <SessionSidebar
+              sessions={filteredSessions}
+              activeSessionId={activeSessionId}
+              sessionQuery={sessionQuery}
+              onSessionQueryChange={setSessionQuery}
+              isSessionStreaming={isSessionStreaming}
+              onNewChat={handleNewChat}
+              onSelectSession={handleSelectSession}
+              onDeleteSession={handleDeleteSession}
+              onRenameSession={handleRenameSession}
+            />
           </ResizablePanel>
 
           <ResizableHandle withHandle className="w-1 bg-border" />
@@ -402,6 +384,9 @@ export default function CopilotPage() {
             <div className="flex h-full flex-col bg-background p-4 sm:p-6">
               <div className="mb-4 space-y-3">
                 <SearchProgressPanel steps={steps} running={running} />
+                {(thinkingTraces.length > 0 || (running && complex)) && (
+                  <ThinkingProgressPanel traces={thinkingTraces} running={running} />
+                )}
               </div>
 
               <ScrollArea className="flex-1 pr-4 font-sans leading-relaxed">
@@ -473,45 +458,13 @@ export default function CopilotPage() {
                   />
                   复杂问题（多步 Agent 检索，演示更长链路）
                 </label>
-                <div className="relative">
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        send();
-                      }
-                    }}
-                    placeholder="询问关于项目的问题..."
-                    className="h-14 border-input bg-white pr-28 text-base font-sans shadow-sm focus-visible:ring-ring"
-                    aria-label="向 AI 提问"
-                  />
-                  <div className="absolute right-2 top-2 flex gap-1">
-                    {running ? (
-                      <Button
-                        size="icon"
-                        type="button"
-                        variant="outline"
-                        className="h-10 w-10"
-                        aria-label="停止生成"
-                        onClick={stopCurrentStream}
-                      >
-                        <Square size={18} className="fill-current" />
-                      </Button>
-                    ) : null}
-                    <Button
-                      size="icon"
-                      type="button"
-                      className="h-10 w-10 bg-primary transition-transform hover:bg-primary/90 active:scale-95"
-                      aria-label="发送"
-                      disabled={running}
-                      onClick={send}
-                    >
-                      <Send size={20} />
-                    </Button>
-                  </div>
-                </div>
+                <CopilotChatInput
+                  value={input}
+                  onChange={setInput}
+                  onSend={send}
+                  onStop={stopCurrentStream}
+                  running={running}
+                />
               </div>
             </div>
           </ResizablePanel>

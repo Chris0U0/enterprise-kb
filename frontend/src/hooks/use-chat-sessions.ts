@@ -87,7 +87,18 @@ export function useChatSessions(projectId: string | undefined) {
     }
   };
 
-  return { sessions, loading, error, refetch: fetchSessions, deleteSession };
+  const renameSession = async (sessionId: string, title: string) => {
+    const updated = await apiFetchJson<ChatSession>(`/chat/sessions/${sessionId}`, {
+      method: "PATCH",
+      json: { title },
+    });
+    setSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, title: updated.title, updated_at: updated.updated_at } : s))
+    );
+    return updated;
+  };
+
+  return { sessions, loading, error, refetch: fetchSessions, deleteSession, renameSession };
 }
 
 export function useChatMessages(sessionId: string | null) {
