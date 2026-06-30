@@ -14,9 +14,43 @@ export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  citations?: any[];
+  citations?: Array<{ doc_id?: string; doc_name?: string; [key: string]: unknown }>;
+  feedback?: "up" | "down" | null;
   created_at: string;
 };
+
+export type RegenerateResult = {
+  session_id: string;
+  query: string;
+  message_id: string;
+};
+
+export async function deleteChatMessage(messageId: string): Promise<void> {
+  await apiFetchJson(`/chat/messages/${messageId}`, { method: "DELETE" });
+}
+
+export async function editChatMessage(messageId: string, content: string): Promise<ChatMessage[]> {
+  return apiFetchJson<ChatMessage[]>(`/chat/messages/${messageId}`, {
+    method: "PATCH",
+    json: { content },
+  });
+}
+
+export async function setMessageFeedback(
+  messageId: string,
+  rating: "up" | "down" | null
+): Promise<ChatMessage> {
+  return apiFetchJson<ChatMessage>(`/chat/messages/${messageId}/feedback`, {
+    method: "POST",
+    json: { rating },
+  });
+}
+
+export async function regenerateChatMessage(messageId: string): Promise<RegenerateResult> {
+  return apiFetchJson<RegenerateResult>(`/chat/messages/${messageId}/regenerate`, {
+    method: "POST",
+  });
+}
 
 export function useChatSessions(projectId: string | undefined) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -82,5 +116,21 @@ export function useChatMessages(sessionId: string | null) {
     void fetchMessages();
   }, [fetchMessages]);
 
-  return { messages, setMessages, loading, error, refetch: fetchMessages };
+  const updateMessageLocally = useCallback((messageId: string, patch: Partial<ChatMessage>) => {
+    setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, ...patch } : m)));
+  }, []);
+
+  const replaceMessages = useCallback((next: ChatMessage[]) => {
+    setMessages(next);
+  }, []);
+
+  return {
+    messages,
+    setMessages,
+    loading,
+    error,
+    refetch: fetchMessages,
+    updateMessageLocally,
+    replaceMessages,
+  };
 }

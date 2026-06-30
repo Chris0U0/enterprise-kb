@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { AppPage, PageHeader } from "@/components/shared/page-layout";
 import { breadcrumbsFromPathname } from "@/lib/route-meta";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,18 +10,27 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Search, Send, FileText, Loader2, Plus, X, ChevronDown } from "lucide-react";
+import { BookOpen, Search, Send, FileText, Loader2, Plus, X, ChevronDown, Square, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/hooks/use-project";
 import { useProjectList } from "@/hooks/use-project-list";
 import { useSearchStream } from "@/hooks/use-search-stream";
 import { SearchProgressPanel } from "@/components/copilot/search-progress-panel";
-import { CitationList } from "@/components/copilot/citation-list";
-import { AnswerActions } from "@/components/copilot/answer-actions";
-import { projectPath, withProjectQuery } from "@/lib/project-links";
+import { ChatMessageBubble } from "@/components/copilot/chat-message-bubble";
+import { StreamingMessageBubble } from "@/components/copilot/streaming-message-bubble";
+import type { MessageFeedback } from "@/components/copilot/message-actions";
+import { copilotPath, withProjectQuery } from "@/lib/project-links";
 import { PdfViewer } from "@/components/shared/pdf-viewer";
 import { apiFetchJson } from "@/lib/api-client";
-import { useChatSessions, useChatMessages, ChatMessage } from "@/hooks/use-chat-sessions";
+import {
+  useChatSessions,
+  useChatMessages,
+  deleteChatMessage,
+  editChatMessage,
+  setMessageFeedback,
+  regenerateChatMessage,
+  type ChatMessage,
+} from "@/hooks/use-chat-sessions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,9 +39,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useRouter } from "next/navigation";
 
-// 引入 react-pdf 样式
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
@@ -49,31 +56,90 @@ export default function CopilotPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { items: projectList } = useProjectList();
-  
-  // 选中的项目 ID
+
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const resolvedProjectId = selectedProjectId || searchParams.get("projectId") || projectList[0]?.id;
-  
+
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const activeSessionIdRef = useRef(activeSessionId);
+  activeSessionIdRef.current = activeSessionId;
+  const urlInitializedRef = useRef(false);
+
   const { project: meta } = useProject(resolvedProjectId || undefined);
-
   const { sessions, refetch: refetchSessions, deleteSession } = useChatSessions(resolvedProjectId);
+  const {
+    messages: historyMessages,
+    loading: loadingHistory,
+    refetch: refetchMessages,
+    updateMessageLocally,
+    replaceMessages,
+  } = useChatMessages(activeSessionId);
 
-  const { steps, running, answer, error, citationLabels, start, reset, sessionId, setSessionId, citations } = useSearchStream();
-  const { messages: historyMessages, loading: loadingHistory, refetch: refetchMessages } = useChatMessages(sessionId);
+  const handleStreamComplete = useCallback(
+    (sessionId: string) => {
+      void refetchSessions();
+      if (activeSessionIdRef.current === sessionId) {
+        void refetchMessages();
+      }
+    },
+    [refetchSessions, refetchMessages]
+  );
+
+  const handleSessionCreated = useCallback((sessionId: string) => {
+    setActiveSessionId((current) => current ?? sessionId);
+  }, []);
+
+  const {
+    steps,
+    running,
+    answer,
+    error,
+    citationLabels,
+    pendingQuery,
+    start,
+    clearDisplay,
+    stopCurrentStream,
+    abortAllStreams,
+    abortStreamByKey,
+    isSessionStreaming,
+    citations,
+  } = useSearchStream({
+    viewSessionId: activeSessionId,
+    onSessionCreated: handleSessionCreated,
+    onStreamComplete: handleStreamComplete,
+  });
 
   const [input, setInput] = useState("");
   const [complex, setComplex] = useState(false);
-  const [pendingQuery, setPendingQuery] = useState<string | null>(null);
-  const prevRunningRef = useRef(false);
+
+  const syncUrl = useCallback(
+    (projectId: string, sessionId: string | null) => {
+      router.replace(copilotPath(projectId, sessionId), { scroll: false });
+    },
+    [router]
+  );
+
+  // 刷新页面时从 URL 恢复 sessionId（仅初始化一次）
+  useEffect(() => {
+    if (urlInitializedRef.current) return;
+    const urlSession = searchParams.get("sessionId");
+    if (urlSession) setActiveSessionId(urlSession);
+    urlInitializedRef.current = true;
+  }, [searchParams]);
+
+  // 状态变更时同步到 URL
+  useEffect(() => {
+    if (!resolvedProjectId || !urlInitializedRef.current) return;
+    syncUrl(resolvedProjectId, activeSessionId);
+  }, [resolvedProjectId, activeSessionId, syncUrl]);
 
   const handleSwitchProject = (id: string) => {
     setSelectedProjectId(id);
-    reset(true);
-    setPendingQuery(null);
-    router.replace(`/copilot?projectId=${id}`);
+    abortAllStreams();
+    setActiveSessionId(null);
+    router.replace(copilotPath(id));
   };
 
-  // 右侧预览状态
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [previewType, setPreviewType] = useState<string>("");
@@ -82,34 +148,19 @@ export default function CopilotPage() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 自动滚动到底部
   useEffect(() => {
     if (scrollRef.current) {
-      const scrollContainer = scrollRef.current.closest('[data-radix-scroll-area-viewport]');
+      const scrollContainer = scrollRef.current.closest("[data-radix-scroll-area-viewport]");
       if (scrollContainer) {
         scrollContainer.scrollTop = scrollContainer.scrollHeight;
       }
     }
   }, [answer, historyMessages, running, pendingQuery]);
 
-  // 流式结束后：从后端拉取完整历史，并清空流式临时状态
-  useEffect(() => {
-    const justFinished = prevRunningRef.current && !running;
-    prevRunningRef.current = running;
-    if (justFinished && sessionId) {
-      void refetchSessions();
-      void refetchMessages();
-      reset(false);
-      setPendingQuery(null);
-    }
-  }, [running, sessionId, refetchSessions, refetchMessages, reset]);
-
-  // 当点击引用时触发
   const handleCitationClick = (docId: string) => {
     setActiveDocId(docId);
   };
 
-  // 监听 activeDocId 变化，获取预览链接
   useEffect(() => {
     if (!activeDocId) return;
     let cancelled = false;
@@ -128,10 +179,11 @@ export default function CopilotPage() {
         if (!cancelled) setPreviewLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [activeDocId]);
 
-  // 当回答中出现新的引用时，自动预览第一个引用
   useEffect(() => {
     const firstId = citations[0]?.doc_id;
     if (firstId && !activeDocId) {
@@ -142,29 +194,87 @@ export default function CopilotPage() {
   const send = () => {
     if (!input.trim() || !resolvedProjectId || running) return;
     const query = input.trim();
-    setPendingQuery(query);
     setInput("");
-    void start(query, resolvedProjectId, complex ? 8 : 5, true, complex);
+    void start(query, resolvedProjectId, complex ? 8 : 5, true, complex, activeSessionId);
   };
 
+  const runQuery = useCallback(
+    (query: string, sessionId?: string | null) => {
+      if (!resolvedProjectId) return;
+      void start(query, resolvedProjectId, complex ? 8 : 5, true, complex, sessionId ?? activeSessionId);
+    },
+    [resolvedProjectId, complex, activeSessionId, start]
+  );
+
+  const mapCitationItems = (msg: ChatMessage) =>
+    (msg.citations ?? []).map((c, i) => ({
+      id: `${msg.id}-${i}`,
+      label: `${c.doc_name || "文档"}`,
+      href: c.doc_id ? `/knowledge?docId=${c.doc_id}` : "/knowledge",
+    }));
+
+  const handleCopyMessage = (content: string) => {
+    void navigator.clipboard?.writeText(content);
+  };
+
+  const handleFeedback = async (messageId: string, rating: MessageFeedback) => {
+    try {
+      const updated = await setMessageFeedback(messageId, rating);
+      updateMessageLocally(messageId, { feedback: updated.feedback as MessageFeedback });
+    } catch (e) {
+      console.error("反馈提交失败:", e);
+    }
+  };
+
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    try {
+      const messages = await editChatMessage(messageId, newContent);
+      replaceMessages(messages);
+      runQuery(newContent, activeSessionId);
+    } catch (e) {
+      console.error("编辑消息失败:", e);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      await deleteChatMessage(messageId);
+      await refetchMessages();
+    } catch (e) {
+      console.error("删除消息失败:", e);
+    }
+  };
+
+  const handleRegenerateMessage = async (messageId: string) => {
+    try {
+      const result = await regenerateChatMessage(messageId);
+      await refetchMessages();
+      runQuery(result.query, result.session_id);
+    } catch (e) {
+      console.error("重新生成失败:", e);
+    }
+  };
+
+  const messageActionsDisabled = running;
+
   const handleSelectSession = (id: string) => {
-    reset(false);
-    setPendingQuery(null);
-    setSessionId(id);
+    clearDisplay();
+    setActiveSessionId(id);
+    void refetchMessages();
   };
 
   const handleDeleteSession = (id: string) => {
     void deleteSession(id);
-    if (sessionId === id) {
-      reset(true);
-      setPendingQuery(null);
+    abortStreamByKey(id);
+    if (activeSessionId === id) {
+      setActiveSessionId(null);
+      clearDisplay();
     }
   };
 
-  // 开启新对话
   const handleNewChat = () => {
-    reset(true);
-    setPendingQuery(null);
+    clearDisplay();
+    setActiveSessionId(null);
   };
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -191,10 +301,7 @@ export default function CopilotPage() {
                   <ChevronDown size={14} className={cn("opacity-50 transition-transform", dropdownOpen ? "rotate-180" : "")} />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent 
-                align="end" 
-                className="w-64" 
-              >
+              <DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuLabel className="flex items-center justify-between">
                   切换知识库项目
                   <Badge variant="outline" className="text-[10px] font-normal">{projectList.length}</Badge>
@@ -202,8 +309,8 @@ export default function CopilotPage() {
                 <DropdownMenuSeparator />
                 <ScrollArea className="h-[300px]">
                   {projectList.map((p) => (
-                    <DropdownMenuItem 
-                      key={p.id} 
+                    <DropdownMenuItem
+                      key={p.id}
                       onClick={() => handleSwitchProject(p.id)}
                       className={cn(
                         "flex flex-col items-start gap-1 py-3 cursor-pointer mx-1 my-0.5 rounded-sm",
@@ -235,12 +342,11 @@ export default function CopilotPage() {
 
       <div className="flex min-h-[min(100dvh,920px)] flex-1 flex-col lg:min-h-[calc(100dvh-12rem)]">
         <ResizablePanelGroup orientation="horizontal" className="min-h-[560px] flex-1">
-          {/* 会话列表侧边栏 */}
           <ResizablePanel defaultSize={15} minSize={10} className="border-r border-border bg-muted/10">
             <div className="flex h-full flex-col p-4">
-              <Button 
-                variant="outline" 
-                className="mb-4 w-full justify-start gap-2 border-dashed" 
+              <Button
+                variant="outline"
+                className="mb-4 w-full justify-start gap-2 border-dashed"
                 onClick={handleNewChat}
               >
                 <Plus size={16} />
@@ -249,20 +355,21 @@ export default function CopilotPage() {
               <ScrollArea className="flex-1 -mx-2 px-2">
                 <div className="space-y-1">
                   {sessions.length === 0 ? (
-                    <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">
-                      暂无历史对话
-                    </p>
+                    <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">暂无历史对话</p>
                   ) : (
                     sessions.map((s) => (
                       <div
                         key={s.id}
                         className={cn(
                           "group flex items-center justify-between rounded-sm px-3 py-2 text-xs transition-colors cursor-pointer",
-                          sessionId === s.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          activeSessionId === s.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                         )}
                         onClick={() => handleSelectSession(s.id)}
                       >
                         <span className="truncate flex-1 mr-2">{s.title}</span>
+                        {isSessionStreaming(s.id) && (
+                          <Loader2 size={12} className="mr-1 shrink-0 animate-spin opacity-70" />
+                        )}
                         <button
                           type="button"
                           className="opacity-0 group-hover:opacity-100 hover:text-destructive"
@@ -283,7 +390,6 @@ export default function CopilotPage() {
 
           <ResizableHandle withHandle className="w-1 bg-border" />
 
-          {/* 中间：会话与思考区 */}
           <ResizablePanel defaultSize={35} minSize={25}>
             <div className="flex h-full flex-col bg-background p-4 sm:p-6">
               <div className="mb-4 space-y-3">
@@ -292,77 +398,52 @@ export default function CopilotPage() {
 
               <ScrollArea className="flex-1 pr-4 font-sans leading-relaxed">
                 <div className="space-y-8 pb-4" ref={scrollRef}>
-                  {loadingHistory && historyMessages.length === 0 && sessionId ? (
+                  {loadingHistory && historyMessages.length === 0 && activeSessionId ? (
                     <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
                       <Loader2 size={16} className="mr-2 animate-spin" />
                       加载历史消息...
                     </div>
                   ) : null}
 
-                  {/* 渲染历史消息 */}
-                  {historyMessages.map((msg, idx) => (
-                    <div 
-                      key={msg.id || idx} 
-                      className={cn(
-                        "group relative border border-border p-4 shadow-sm",
-                        msg.role === "user" ? "bg-secondary/30 ml-8" : "bg-white mr-8"
-                      )}
-                    >
-                      <div className="prose prose-sm max-w-none">
-                        <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                          {msg.content}
-                        </div>
-                      </div>
-                      {msg.citations && msg.citations.length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-border">
-                          <CitationList 
-                            items={msg.citations.map((c, i) => ({
-                              id: `${msg.id}-${i}`,
-                              label: `${c.doc_name || '文档'}`,
-                              href: `/knowledge?docId=${c.doc_id}`
-                            }))} 
-                            projectId={resolvedProjectId ?? ""}
-                            onCitationClick={handleCitationClick}
-                          />
-                        </div>
-                      )}
-                    </div>
+                  {historyMessages.map((msg) => (
+                    <ChatMessageBubble
+                      key={msg.id}
+                      message={msg}
+                      projectId={resolvedProjectId ?? ""}
+                      citationItems={mapCitationItems(msg)}
+                      onCitationClick={handleCitationClick}
+                      onCopy={handleCopyMessage}
+                      onFeedback={handleFeedback}
+                      onEdit={handleEditMessage}
+                      onDelete={handleDeleteMessage}
+                      onRegenerate={handleRegenerateMessage}
+                      actionsDisabled={messageActionsDisabled}
+                    />
                   ))}
 
-                  {/* 当前轮次用户提问（流式完成前尚未写入 historyMessages） */}
                   {pendingQuery && (
-                    <div className="group relative ml-8 border border-border bg-secondary/30 p-4 shadow-sm">
-                      <div className="whitespace-pre-wrap text-sm leading-relaxed">{pendingQuery}</div>
-                    </div>
-                  )}
-
-                  {/* 当前正在生成的消息 */}
-                  {(answer || error || (running && !answer)) && (
-                    <div className="paper-shadow group relative border border-border bg-white p-6 shadow-sm mr-8">
-                      <div className="absolute -left-2 top-6 h-8 w-1 bg-primary opacity-0 transition-opacity group-hover:opacity-100" />
-                      <div className="prose prose-sm max-w-none">
-                        {answer ? (
-                          <div className="mb-4 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                            {answer}
-                          </div>
-                        ) : running && !answer ? (
-                          <div className="max-w-[80%] rounded-md bg-muted px-4 py-3 text-sm animate-pulse">
-                            AI 正在思考并检索相关文档...
-                          </div>
-                        ) : null}
-                        {error ? <p className="text-destructive text-sm font-medium">{error}</p> : null}
+                    <div className="flex flex-row-reverse gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-secondary text-secondary-foreground">
+                        <User size={16} />
                       </div>
-                      {citationLabels.length > 0 && (
-                        <CitationList 
-                          items={citationLabels} 
-                          projectId={resolvedProjectId ?? ""} 
-                          onCitationClick={handleCitationClick}
-                        />
-                      )}
+                      <div className="max-w-[85%] rounded-lg border border-border bg-secondary/40 px-4 py-3 text-sm leading-relaxed shadow-sm">
+                        {pendingQuery}
+                      </div>
                     </div>
                   )}
 
-                  {!sessionId && !running && !pendingQuery && historyMessages.length === 0 && !answer && (
+                  {(answer || error || (running && !answer)) && (
+                    <StreamingMessageBubble
+                      answer={answer}
+                      error={error}
+                      running={running}
+                      citationLabels={citationLabels}
+                      projectId={resolvedProjectId ?? ""}
+                      onCitationClick={handleCitationClick}
+                    />
+                  )}
+
+                  {!activeSessionId && !running && !pendingQuery && historyMessages.length === 0 && !answer && (
                     <div className="flex flex-col items-center justify-center h-[300px] text-center space-y-4 opacity-40">
                       <BookOpen size={48} className="text-muted-foreground" />
                       <div className="space-y-1">
@@ -395,19 +476,33 @@ export default function CopilotPage() {
                       }
                     }}
                     placeholder="询问关于项目的问题..."
-                    className="h-14 border-input bg-white pr-24 text-base font-sans shadow-sm focus-visible:ring-ring"
+                    className="h-14 border-input bg-white pr-28 text-base font-sans shadow-sm focus-visible:ring-ring"
                     aria-label="向 AI 提问"
                   />
-                  <Button
-                    size="icon"
-                    type="button"
-                    className="absolute right-2 top-2 h-10 w-10 bg-primary transition-transform hover:bg-primary/90 active:scale-95"
-                    aria-label="发送"
-                    disabled={running}
-                    onClick={send}
-                  >
-                    {running ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-                  </Button>
+                  <div className="absolute right-2 top-2 flex gap-1">
+                    {running ? (
+                      <Button
+                        size="icon"
+                        type="button"
+                        variant="outline"
+                        className="h-10 w-10"
+                        aria-label="停止生成"
+                        onClick={stopCurrentStream}
+                      >
+                        <Square size={18} className="fill-current" />
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="icon"
+                      type="button"
+                      className="h-10 w-10 bg-primary transition-transform hover:bg-primary/90 active:scale-95"
+                      aria-label="发送"
+                      disabled={running}
+                      onClick={send}
+                    >
+                      <Send size={20} />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -415,7 +510,6 @@ export default function CopilotPage() {
 
           <ResizableHandle withHandle className="w-1 bg-border transition-colors hover:bg-accent" />
 
-          {/* 右侧：源文件对比区 */}
           <ResizablePanel defaultSize={55}>
             <div className="flex h-full flex-col bg-muted/20">
               <div className="z-10 flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-6 shadow-sm">
@@ -457,15 +551,13 @@ export default function CopilotPage() {
                 ) : previewUrl && (previewType === "application/pdf" || previewUrl.toLowerCase().includes(".pdf")) ? (
                   <PdfViewer url={previewUrl} className="h-full w-full border-none shadow-2xl" />
                 ) : previewUrl ? (
-                  <iframe 
-                    src={previewUrl} 
+                  <iframe
+                    src={previewUrl}
                     className="h-full w-full rounded-md border-none bg-white shadow-2xl"
                     title="文档预览"
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-white">
-                    正在加载预览内容...
-                  </div>
+                  <div className="flex h-full items-center justify-center text-white">正在加载预览内容...</div>
                 )}
               </div>
             </div>

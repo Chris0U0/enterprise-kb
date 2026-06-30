@@ -176,6 +176,7 @@ class ChatMessage(Base):
     role = Column(String(20), nullable=False)  # user / assistant
     content = Column(Text, nullable=False)
     citations = Column(JSONB)  # 存储该消息关联的引用来源
+    feedback = Column(String(10), nullable=True)  # up / down
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
     session = relationship("ChatSession", back_populates="messages")

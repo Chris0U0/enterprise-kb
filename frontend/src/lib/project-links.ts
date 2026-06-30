@@ -14,6 +14,15 @@ export function withProjectQuery(
   return `${basePath}${sep}${s}`;
 }
 
+/** Copilot 页 URL：projectId + 可选 sessionId */
+export function copilotPath(projectId: string, sessionId?: string | null): string {
+  const params = new URLSearchParams();
+  if (projectId) params.set("projectId", projectId);
+  if (sessionId) params.set("sessionId", sessionId);
+  const qs = params.toString();
+  return qs ? `/copilot?${qs}` : "/copilot";
+}
+
 export function projectPath(projectId: string, segment: string): string {
   const s = segment.replace(/^\//, "");
   return `/projects/${projectId}/${s}`;
