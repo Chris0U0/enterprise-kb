@@ -28,6 +28,7 @@ type ChatMessageBubbleProps = {
   onDelete?: (messageId: string) => void;
   onRegenerate?: (messageId: string) => void;
   actionsDisabled?: boolean;
+  readOnly?: boolean;
 };
 
 export function ChatMessageBubble({
@@ -41,6 +42,7 @@ export function ChatMessageBubble({
   onDelete,
   onRegenerate,
   actionsDisabled = false,
+  readOnly = false,
 }: ChatMessageBubbleProps) {
   const isUser = message.role === "user";
   const [editing, setEditing] = useState(false);
@@ -123,16 +125,24 @@ export function ChatMessageBubble({
 
           {!isUser && citationItems.length > 0 && (
             <div className="mt-4 border-t border-border pt-4">
-              <CitationList
-                items={citationItems}
-                projectId={projectId}
-                onCitationClick={onCitationClick}
-              />
+              {readOnly ? (
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  {citationItems.map((c) => (
+                    <li key={c.id}>· {c.label}</li>
+                  ))}
+                </ul>
+              ) : (
+                <CitationList
+                  items={citationItems}
+                  projectId={projectId}
+                  onCitationClick={onCitationClick}
+                />
+              )}
             </div>
           )}
         </div>
 
-        {!editing && (
+        {!readOnly && !editing && (
           <MessageActions
             role={message.role}
             feedback={(message.feedback as MessageFeedback) ?? null}

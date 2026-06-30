@@ -79,7 +79,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadMe]);
 
   useEffect(() => {
-    if (!isLoading && !user && pathname !== "/login") {
+    const isPublicShare = pathname.startsWith("/share/");
+    if (!isLoading && !user && pathname !== "/login" && !isPublicShare) {
       router.push("/login");
     }
   }, [user, isLoading, pathname, router]);

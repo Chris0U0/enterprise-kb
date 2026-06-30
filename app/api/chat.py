@@ -5,13 +5,20 @@ from datetime import datetime
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import ensure_project_member, get_current_user
 from app.core.database import get_db
-from app.models.database import ChatMessage, ChatSession, User
+from app.models.database import ChatMessage, ChatSession, ChatSessionShare, User
+from app.services.chat.export_share import (
+    create_session_share,
+    export_session_json,
+    export_session_markdown,
+    load_session_messages,
+)
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -50,6 +57,47 @@ class RegenerateResponse(BaseModel):
     session_id: uuid.UUID
     query: str
     message_id: uuid.UUID
+
+
+class CreateShareRequest(BaseModel):
+    """expires_in_days: 0 表示永久有效，1~365 表示天数"""
+    expires_in_days: Optional[int] = Field(default=7, ge=0, le=365)
+
+
+class ShareLinkSchema(BaseModel):
+    id: uuid.UUID
+    share_token: str
+    share_path: str
+    title: str
+    expires_at: datetime | None
+    revoked_at: datetime | None
+    view_count: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CreateShareResponse(BaseModel):
+    share_token: str
+    share_path: str
+    expires_at: datetime | None
+    created_at: datetime
+
+
+async def _get_owned_session(
+    session_id: uuid.UUID,
+    user: User,
+    db: AsyncSession,
+) -> ChatSession:
+    result = await db.execute(select(ChatSession).where(ChatSession.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    if session.user_id != user.id:
+        raise HTTPException(status_code=403, detail="无权操作他人的会话")
+    await ensure_project_member(session.project_id, user, db)
+    return session
 
 
 async def _get_owned_message(
@@ -271,3 +319,133 @@ async def regenerate_from_message(
         )
 
     raise HTTPException(status_code=400, detail="不支持的消息类型")
+
+
+@router.get("/sessions/{session_id}/export")
+async def export_chat_session(
+    session_id: uuid.UUID,
+    format: Literal["md", "json"] = Query(default="md", alias="format"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """导出会话为 Markdown 或 JSON"""
+    await _get_owned_session(session_id, user, db)
+    try:
+        session, messages, project_name = await load_session_messages(session_id, db)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    if not messages:
+        raise HTTPException(status_code=400, detail="空会话无法导出")
+
+    safe_title = "".join(c if c.isalnum() or c in "._- " else "_" for c in session.title)[:80].strip() or "chat"
+
+    if format == "json":
+        body = export_session_json(
+            title=session.title,
+            project_name=project_name,
+            session_id=str(session.id),
+            messages=messages,
+        )
+        return Response(
+            content=body,
+            media_type="application/json; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{safe_title}.json"'},
+        )
+
+    body = export_session_markdown(
+        title=session.title,
+        project_name=project_name,
+        messages=messages,
+    )
+    return Response(
+        content=body,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{safe_title}.md"'},
+    )
+
+
+@router.post("/sessions/{session_id}/shares", response_model=CreateShareResponse)
+async def create_chat_share(
+    session_id: uuid.UUID,
+    body: CreateShareRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """创建会话快照分享链接（公开只读）"""
+    session = await _get_owned_session(session_id, user, db)
+    try:
+        _session, messages, project_name = await load_session_messages(session_id, db)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    try:
+        share = await create_session_share(
+            session=session,
+            messages=messages,
+            project_name=project_name,
+            user=user,
+            db=db,
+            expires_in_days=body.expires_in_days,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    return CreateShareResponse(
+        share_token=share.share_token,
+        share_path=f"/share/{share.share_token}",
+        expires_at=share.expires_at,
+        created_at=share.created_at,
+    )
+
+
+@router.get("/sessions/{session_id}/shares", response_model=List[ShareLinkSchema])
+async def list_chat_shares(
+    session_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出某会话的分享记录"""
+    await _get_owned_session(session_id, user, db)
+    result = await db.execute(
+        select(ChatSessionShare)
+        .where(ChatSessionShare.session_id == session_id)
+        .order_by(ChatSessionShare.created_at.desc())
+    )
+    shares = result.scalars().all()
+    return [
+        ShareLinkSchema(
+            id=s.id,
+            share_token=s.share_token,
+            share_path=f"/share/{s.share_token}",
+            title=s.title,
+            expires_at=s.expires_at,
+            revoked_at=s.revoked_at,
+            view_count=s.view_count or 0,
+            created_at=s.created_at,
+        )
+        for s in shares
+    ]
+
+
+@router.delete("/shares/{token}")
+async def revoke_chat_share(
+    token: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """撤销分享链接"""
+    result = await db.execute(
+        select(ChatSessionShare).where(ChatSessionShare.share_token == token)
+    )
+    share = result.scalar_one_or_none()
+    if not share:
+        raise HTTPException(status_code=404, detail="分享不存在")
+
+    session = await _get_owned_session(share.session_id, user, db)
+    if share.created_by != user.id and session.user_id != user.id:
+        raise HTTPException(status_code=403, detail="无权撤销该分享")
+
+    share.revoked_at = datetime.utcnow()
+    await db.commit()
+    return {"message": "分享已撤销", "share_token": token}

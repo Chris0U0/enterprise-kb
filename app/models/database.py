@@ -180,3 +180,20 @@ class ChatMessage(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
     session = relationship("ChatSession", back_populates="messages")
+
+
+class ChatSessionShare(Base):
+    """会话快照分享（公开只读链接）"""
+    __tablename__ = "chat_session_shares"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    share_token = Column(String(64), unique=True, nullable=False, index=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(255), nullable=False)
+    project_name = Column(String(255), nullable=True)
+    snapshot = Column(JSONB, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    view_count = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)

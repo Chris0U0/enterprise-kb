@@ -11,8 +11,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const pathname = usePathname();
 
-  // 登录页面不需要布局
-  if (pathname === '/login') {
+  // 登录页与公开分享页不需要布局
+  if (pathname === '/login' || pathname.startsWith('/share/')) {
     return <>{children}</>;
   }
 

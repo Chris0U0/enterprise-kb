@@ -17,6 +17,7 @@ import { useProjectList } from "@/hooks/use-project-list";
 import { useSearchStream } from "@/hooks/use-search-stream";
 import { SearchProgressPanel } from "@/components/copilot/search-progress-panel";
 import { ChatMessageBubble } from "@/components/copilot/chat-message-bubble";
+import { SessionShareExportMenu } from "@/components/copilot/session-share-export-menu";
 import { StreamingMessageBubble } from "@/components/copilot/streaming-message-bubble";
 import type { MessageFeedback } from "@/components/copilot/message-actions";
 import { copilotPath, withProjectQuery } from "@/lib/project-links";
@@ -294,6 +295,13 @@ export default function CopilotPage() {
         breadcrumbs={breadcrumbsFromPathname("/copilot")}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <SessionShareExportMenu
+              sessionId={activeSessionId}
+              disabled={
+                !activeSessionId ||
+                (historyMessages.length === 0 && !answer && !running)
+              }
+            />
             <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
               <DropdownMenuTrigger asChild>
                 <Button variant="secondary" size="sm" className="gap-2 font-sans transition-all hover:bg-secondary/80">
