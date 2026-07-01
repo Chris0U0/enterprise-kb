@@ -9,19 +9,14 @@ import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/copilot/markdown-content";
 import { MessageActions, type MessageFeedback } from "@/components/copilot/message-actions";
 import { CitationList } from "@/components/copilot/citation-list";
+import type { CitationListItem, CitationTarget } from "@/lib/citation-target";
 import type { ChatMessage } from "@/hooks/use-chat-sessions";
-
-type CitationItem = {
-  id: string;
-  label: string;
-  href: string;
-};
 
 type ChatMessageBubbleProps = {
   message: ChatMessage;
   projectId: string;
-  citationItems?: CitationItem[];
-  onCitationClick?: (docId: string) => void;
+  citationItems?: CitationListItem[];
+  onCitationClick?: (target: CitationTarget) => void;
   onCopy: (content: string) => void;
   onFeedback?: (messageId: string, rating: MessageFeedback) => void;
   onEdit?: (messageId: string, newContent: string) => void;

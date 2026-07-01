@@ -23,6 +23,8 @@ import { SessionShareExportMenu } from "@/components/copilot/session-share-expor
 import { StreamingMessageBubble } from "@/components/copilot/streaming-message-bubble";
 import type { MessageFeedback } from "@/components/copilot/message-actions";
 import { copilotPath, withProjectQuery } from "@/lib/project-links";
+import { toCitationListItem } from "@/lib/citation-target";
+import type { CitationTarget } from "@/lib/citation-target";
 import { PdfViewer } from "@/components/shared/pdf-viewer";
 import { apiFetchJson } from "@/lib/api-client";
 import {
@@ -100,7 +102,10 @@ export default function CopilotPage() {
     error,
     citationLabels,
     pendingQuery,
+    queuedCount,
+    failedQuery,
     start,
+    retryLastQuery,
     clearDisplay,
     stopCurrentStream,
     abortAllStreams,
@@ -152,6 +157,8 @@ export default function CopilotPage() {
   };
 
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const [pdfPage, setPdfPage] = useState<number | undefined>(undefined);
+  const [activeSectionLabel, setActiveSectionLabel] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [previewType, setPreviewType] = useState<string>("");
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -168,8 +175,10 @@ export default function CopilotPage() {
     }
   }, [answer, historyMessages, running, pendingQuery]);
 
-  const handleCitationClick = (docId: string) => {
-    setActiveDocId(docId);
+  const handleCitationClick = (target: CitationTarget) => {
+    setActiveDocId(target.docId);
+    setPdfPage(typeof target.pageNum === "number" ? target.pageNum : undefined);
+    setActiveSectionLabel(target.sectionTitle ?? target.sectionPath ?? null);
   };
 
   useEffect(() => {
@@ -203,10 +212,15 @@ export default function CopilotPage() {
   }, [citations, activeDocId]);
 
   const send = () => {
-    if (!input.trim() || !resolvedProjectId || running) return;
+    if (!input.trim() || !resolvedProjectId) return;
     const query = input.trim();
     setInput("");
     void start(query, resolvedProjectId, complex ? 8 : 5, true, complex, activeSessionId);
+  };
+
+  const handleRetry = () => {
+    if (!resolvedProjectId) return;
+    retryLastQuery(resolvedProjectId, complex ? 8 : 5, complex);
   };
 
   const runQuery = useCallback(
@@ -218,11 +232,7 @@ export default function CopilotPage() {
   );
 
   const mapCitationItems = (msg: ChatMessage) =>
-    (msg.citations ?? []).map((c, i) => ({
-      id: `${msg.id}-${i}`,
-      label: `${c.doc_name || "文档"}`,
-      href: c.doc_id ? `/knowledge?docId=${c.doc_id}` : "/knowledge",
-    }));
+    (msg.citations ?? []).map((c, i) => toCitationListItem(c, `${msg.id}-${i}`));
 
   const handleCopyMessage = (content: string) => {
     void navigator.clipboard?.writeText(content);
@@ -433,6 +443,7 @@ export default function CopilotPage() {
                       citationLabels={citationLabels}
                       projectId={resolvedProjectId ?? ""}
                       onCitationClick={handleCitationClick}
+                      onRetry={error && failedQuery ? handleRetry : undefined}
                     />
                   )}
 
@@ -462,8 +473,9 @@ export default function CopilotPage() {
                   value={input}
                   onChange={setInput}
                   onSend={send}
-                  onStop={stopCurrentStream}
+                  onStop={() => void stopCurrentStream()}
                   running={running}
+                  queuedCount={queuedCount}
                 />
               </div>
             </div>
@@ -479,6 +491,16 @@ export default function CopilotPage() {
                   <span className="font-serif text-base italic truncate">
                     {activeDocName || "选择引用文档以查看原文"}
                   </span>
+                  {activeSectionLabel ? (
+                    <Badge variant="outline" className="max-w-[12rem] truncate text-[10px] font-sans font-normal">
+                      {activeSectionLabel}
+                    </Badge>
+                  ) : null}
+                  {pdfPage ? (
+                    <Badge variant="secondary" className="text-[10px] font-sans">
+                      第 {pdfPage} 页
+                    </Badge>
+                  ) : null}
                   {activeDocId && (
                     <Badge variant="secondary" className="text-[10px] font-sans">
                       ID: {activeDocId.slice(0, 8)}...
@@ -510,7 +532,12 @@ export default function CopilotPage() {
                     <p className="text-sm italic font-serif">提问后点击“引用”可在此处研读原文</p>
                   </div>
                 ) : previewUrl && (previewType === "application/pdf" || previewUrl.toLowerCase().includes(".pdf")) ? (
-                  <PdfViewer url={previewUrl} className="h-full w-full border-none shadow-2xl" />
+                  <PdfViewer
+                    key={`${activeDocId}-${pdfPage ?? 0}`}
+                    url={previewUrl}
+                    initialPage={pdfPage}
+                    className="h-full w-full border-none shadow-2xl"
+                  />
                 ) : previewUrl ? (
                   <iframe
                     src={previewUrl}

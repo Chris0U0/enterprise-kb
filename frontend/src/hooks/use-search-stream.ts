@@ -4,10 +4,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiV1 } from "@/lib/api";
 import { getAccessToken } from "@/lib/api-client";
 
+import { toCitationListItem } from "@/lib/citation-target";
+import { savePartialAssistant } from "@/hooks/use-chat-sessions";
+
+export type PlanStepItem = {
+  id: string | number;
+  thought: string;
+  action: string;
+};
+
 export type StreamStep = {
   id: string;
   label: string;
   status: "pending" | "active" | "done";
+  message?: string;
+  planSteps?: PlanStepItem[];
+  found?: string;
+  sourcesCount?: number;
+  confidence?: number;
 };
 
 export type ThinkingTrace = {
@@ -25,6 +39,14 @@ type CitationEvent = {
   page_num?: number | null;
 };
 
+type QueuedQuery = {
+  query: string;
+  projectId: string;
+  topK: number;
+  deep: boolean;
+  sessionId: string | null;
+};
+
 type StreamRun = {
   key: string;
   sessionId: string | null;
@@ -33,6 +55,7 @@ type StreamRun = {
   steps: StreamStep[];
   thinkingTraces: ThinkingTrace[];
   error: string | null;
+  failedQuery: string | null;
   citations: CitationEvent[];
   pendingQuery: string;
   controller: AbortController;
@@ -44,6 +67,7 @@ type DisplayState = {
   steps: StreamStep[];
   thinkingTraces: ThinkingTrace[];
   error: string | null;
+  failedQuery: string | null;
   citations: CitationEvent[];
   pendingQuery: string | null;
 };
@@ -63,25 +87,68 @@ const emptyDisplay: DisplayState = {
   steps: [],
   thinkingTraces: [],
   error: null,
+  failedQuery: null,
   citations: [],
   pendingQuery: null,
 };
 
+const PENDING_QUEUE_KEY = "__pending__";
+
 let pendingCounter = 0;
 
-function upsertStep(prev: StreamStep[], phase: string): StreamStep[] {
-  const id = phase;
-  const label = STEP_LABELS[phase] ?? phase;
-  const existing = prev.find((s) => s.id === id);
+function parsePlanSteps(data: Record<string, unknown>): PlanStepItem[] | undefined {
+  if (!Array.isArray(data.steps)) return undefined;
+  return data.steps
+    .map((s) => {
+      if (!s || typeof s !== "object") return null;
+      const row = s as Record<string, unknown>;
+      return {
+        id: (row.id ?? row.step_id ?? "") as string | number,
+        thought: typeof row.thought === "string" ? row.thought : "",
+        action: typeof row.action === "string" ? row.action : "",
+      };
+    })
+    .filter(Boolean) as PlanStepItem[];
+}
+
+function applyStepEvent(prev: StreamStep[], data: Record<string, unknown>): StreamStep[] {
+  const phase = typeof data.phase === "string" ? data.phase : "";
+  if (!phase) return prev;
+
+  const message = typeof data.message === "string" ? data.message : undefined;
+  const label = message ?? STEP_LABELS[phase] ?? phase;
+  const planSteps = phase === "plan_ready" ? parsePlanSteps(data) : undefined;
+  const found = typeof data.found === "string" ? data.found : undefined;
+  const sourcesCount = typeof data.sources_count === "number" ? data.sources_count : undefined;
+  const confidence = typeof data.confidence === "number" ? data.confidence : undefined;
+
+  const stepId =
+    phase === "step_completed" && (typeof data.step_id === "number" || typeof data.step_id === "string")
+      ? `step_completed_${data.step_id}`
+      : phase;
+
+  const existing = prev.find((s) => s.id === stepId);
+  const nextStep: StreamStep = {
+    id: stepId,
+    label,
+    status: "active",
+    message,
+    planSteps,
+    found,
+    sourcesCount,
+    confidence,
+  };
+
   if (!existing) {
     return [
       ...prev.map((s) => (s.status === "active" ? { ...s, status: "done" as const } : s)),
-      { id, label, status: "active" },
+      nextStep,
     ];
   }
+
   return prev.map((s) => {
-    if (s.id === id) return { ...s, status: "active" };
-    if (s.status === "active") return { ...s, status: "done" };
+    if (s.id === stepId) return { ...s, ...nextStep, status: "active" as const };
+    if (s.status === "active") return { ...s, status: "done" as const };
     return s;
   });
 }
@@ -93,6 +160,7 @@ function streamToDisplay(stream: StreamRun): DisplayState {
     steps: stream.steps,
     thinkingTraces: stream.thinkingTraces,
     error: stream.error,
+    failedQuery: stream.failedQuery,
     citations: stream.citations,
     pendingQuery: stream.pendingQuery,
   };
@@ -115,11 +183,23 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
   onStreamCompleteRef.current = options.onStreamComplete;
 
   const streamsRef = useRef<Map<string, StreamRun>>(new Map());
+  const queueRef = useRef<Map<string, QueuedQuery[]>>(new Map());
+  const startImplRef = useRef<
+    (
+      query: string,
+      projectId: string,
+      topK?: number,
+      useCurrentSession?: boolean,
+      deep?: boolean,
+      explicitSessionId?: string | null
+    ) => Promise<void>
+  >(async () => {});
   /** 新对话页面上尚未获得 session_id 的流 */
   const activePendingKeyRef = useRef<string | null>(null);
 
   const [display, setDisplay] = useState<DisplayState>(emptyDisplay);
   const [streamingSessionIds, setStreamingSessionIds] = useState<string[]>([]);
+  const [queuedCount, setQueuedCount] = useState(0);
   const [, bump] = useState(0);
   const forceUpdate = () => bump((n) => n + 1);
 
@@ -129,6 +209,39 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
       .map((s) => s.sessionId as string);
     setStreamingSessionIds(ids);
   }, []);
+
+  const queueKeyFor = useCallback(
+    (sessionId: string | null) => sessionId ?? PENDING_QUEUE_KEY,
+    []
+  );
+
+  const refreshQueuedCount = useCallback(() => {
+    const key = queueKeyFor(viewSessionId);
+    setQueuedCount(queueRef.current.get(key)?.length ?? 0);
+  }, [viewSessionId, queueKeyFor]);
+
+  const drainQueue = useCallback(
+    (sessionId: string | null) => {
+      const key = queueKeyFor(sessionId);
+      const queue = queueRef.current.get(key);
+      if (!queue?.length) {
+        refreshQueuedCount();
+        return;
+      }
+      const next = queue.shift()!;
+      if (!queue.length) queueRef.current.delete(key);
+      refreshQueuedCount();
+      void startImplRef.current(
+        next.query,
+        next.projectId,
+        next.topK,
+        true,
+        next.deep,
+        next.sessionId
+      );
+    },
+    [queueKeyFor, refreshQueuedCount]
+  );
 
   const getDisplayStream = useCallback((): StreamRun | undefined => {
     if (viewSessionId) {
@@ -168,7 +281,7 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
   );
 
   const finishStream = useCallback(
-    (key: string, resolvedSessionId: string | null) => {
+    (key: string, resolvedSessionId: string | null, opts?: { keepVisible?: boolean }) => {
       const stream = streamsRef.current.get(key);
       if (!stream) return;
 
@@ -190,17 +303,32 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
         streamsRef.current.set(sid, stream);
       }
 
-      if (sid) {
+      const hasError = !!stream.error;
+      if (hasError && !stream.failedQuery) {
+        stream.failedQuery = stream.pendingQuery;
+      }
+
+      if (sid && !hasError) {
         onStreamCompleteRef.current?.(sid);
       }
 
       if (viewSessionId && sid === viewSessionId) {
-        setDisplay(emptyDisplay);
+        if (hasError || opts?.keepVisible) {
+          setDisplay(streamToDisplay(stream));
+        } else {
+          setDisplay(emptyDisplay);
+        }
+      } else if (!viewSessionId && !sid && hasError) {
+        setDisplay(streamToDisplay(stream));
       } else {
         syncDisplayToView();
       }
       forceUpdate();
       refreshStreamingIds();
+
+      if (hasError) {
+        return;
+      }
 
       if (sid) {
         window.setTimeout(() => {
@@ -211,8 +339,10 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
           }
         }, 500);
       }
+
+      drainQueue(sid);
     },
-    [viewSessionId, syncDisplayToView, refreshStreamingIds]
+    [viewSessionId, syncDisplayToView, refreshStreamingIds, drainQueue]
   );
 
   const abortStreamByKey = useCallback((key: string) => {
@@ -234,28 +364,57 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
       stream.controller.abort();
     }
     streamsRef.current.clear();
+    queueRef.current.clear();
     activePendingKeyRef.current = null;
     setDisplay(emptyDisplay);
     setStreamingSessionIds([]);
+    setQueuedCount(0);
     forceUpdate();
   }, []);
 
   /** 仅清空当前视图展示，不中断后台流 */
   const clearDisplay = useCallback(() => {
     activePendingKeyRef.current = null;
+    queueRef.current.delete(queueKeyFor(viewSessionId));
+    if (!viewSessionId) {
+      queueRef.current.delete(PENDING_QUEUE_KEY);
+    }
+    setQueuedCount(0);
     setDisplay(emptyDisplay);
-  }, []);
+  }, [viewSessionId, queueKeyFor]);
 
-  /** 停止当前视图正在进行的生成 */
-  const stopCurrentStream = useCallback(() => {
-    if (viewSessionId) {
-      abortStreamByKey(viewSessionId);
-      return;
+  /** 停止当前视图正在进行的生成，并保存已输出内容 */
+  const stopCurrentStream = useCallback(async () => {
+    const stream = getDisplayStream();
+    if (!stream?.running) return;
+
+    const key = stream.key;
+    const sid = stream.sessionId;
+    stream.controller.abort();
+
+    if (sid && stream.answer.trim()) {
+      try {
+        await savePartialAssistant(sid, stream.answer.trim(), stream.citations);
+        onStreamCompleteRef.current?.(sid);
+      } catch (e) {
+        console.error("保存部分内容失败:", e);
+      }
     }
-    if (activePendingKeyRef.current) {
-      abortStreamByKey(activePendingKeyRef.current);
+
+    streamsRef.current.delete(key);
+    if (activePendingKeyRef.current === key) {
+      activePendingKeyRef.current = null;
     }
-  }, [viewSessionId, abortStreamByKey]);
+
+    if (viewSessionId && sid === viewSessionId) {
+      setDisplay(emptyDisplay);
+    } else {
+      syncDisplayToView();
+    }
+    forceUpdate();
+    refreshStreamingIds();
+    drainQueue(sid);
+  }, [getDisplayStream, viewSessionId, syncDisplayToView, refreshStreamingIds, drainQueue]);
 
   const start = useCallback(
     async (
@@ -267,8 +426,20 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
       explicitSessionId?: string | null
     ) => {
       const targetSessionId = useCurrentSession ? (explicitSessionId ?? viewSessionId) : null;
+      const runningKey = targetSessionId ?? activePendingKeyRef.current ?? null;
+      if (runningKey) {
+        const existing = streamsRef.current.get(runningKey);
+        if (existing?.running) {
+          const qKey = queueKeyFor(targetSessionId);
+          const queue = queueRef.current.get(qKey) ?? [];
+          queue.push({ query, projectId, topK, deep, sessionId: targetSessionId });
+          queueRef.current.set(qKey, queue);
+          refreshQueuedCount();
+          return;
+        }
+      }
 
-      // 同一会话重复提问：仅中止该会话的旧流
+      // 同一会话重复提问（非排队场景）：中止该会话的旧流
       if (targetSessionId) {
         abortStreamByKey(targetSessionId);
       } else if (activePendingKeyRef.current) {
@@ -289,6 +460,7 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
         steps: [],
         thinkingTraces: [],
         error: null,
+        failedQuery: null,
         citations: [],
         pendingQuery: query,
         controller,
@@ -359,10 +531,17 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
                   }
                 }
                 onSessionCreatedRef.current?.(newId);
+                const pendingQ = queueRef.current.get(PENDING_QUEUE_KEY);
+                if (pendingQ?.length) {
+                  const existingQ = queueRef.current.get(newId) ?? [];
+                  queueRef.current.set(newId, [...existingQ, ...pendingQ]);
+                  queueRef.current.delete(PENDING_QUEUE_KEY);
+                  refreshQueuedCount();
+                }
                 refreshStreamingIds();
               } else if (type === "step" && typeof data.phase === "string") {
                 const s = streamsRef.current.get(currentKey) ?? streamsRef.current.get(streamKey);
-                if (s) patchStream(s.key, { steps: upsertStep(s.steps, data.phase as string) });
+                if (s) patchStream(s.key, { steps: applyStepEvent(s.steps, data) });
               } else if (type === "thinking") {
                 const s = streamsRef.current.get(currentKey) ?? streamsRef.current.get(streamKey);
                 if (s) {
@@ -388,6 +567,7 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
                 if (s) {
                   patchStream(s.key, {
                     error: typeof data.message === "string" ? data.message : "流式检索失败",
+                    failedQuery: s.pendingQuery,
                   });
                 }
               } else if (type === "done") {
@@ -407,14 +587,43 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
 
         finishStream(streamKey, resolvedSessionId);
       } catch (e) {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) {
+          drainQueue(resolvedSessionId);
+          return;
+        }
         patchStream(streamKey, {
           error: e instanceof Error ? e.message : "流式检索失败",
+          failedQuery: query,
         });
         finishStream(streamKey, resolvedSessionId);
       }
     },
-    [viewSessionId, abortStreamByKey, patchStream, finishStream, refreshStreamingIds]
+    [
+      viewSessionId,
+      abortStreamByKey,
+      patchStream,
+      finishStream,
+      refreshStreamingIds,
+      queueKeyFor,
+      refreshQueuedCount,
+      drainQueue,
+    ]
+  );
+
+  startImplRef.current = start;
+
+  const retryLastQuery = useCallback(
+    (projectId: string, topK = 5, deep = false) => {
+      const q = display.failedQuery ?? display.pendingQuery;
+      if (!q) return;
+      const stream = getDisplayStream();
+      if (stream) {
+        streamsRef.current.delete(stream.key);
+      }
+      setDisplay(emptyDisplay);
+      void start(q, projectId, topK, true, deep, viewSessionId);
+    },
+    [display.failedQuery, display.pendingQuery, getDisplayStream, start, viewSessionId]
   );
 
   const isSessionStreaming = useCallback(
@@ -424,20 +633,9 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
 
   const citationLabels = useMemo(
     () =>
-      display.citations.map((c, idx) => {
-        const suffix = c.page_num ? ` · 第${c.page_num}页` : "";
-        const section = c.section_title ?? c.section_path ?? "";
-        const params = new URLSearchParams({
-          ...(c.doc_id ? { docId: c.doc_id } : {}),
-          ...(c.section_path ? { sectionPath: c.section_path } : {}),
-          ...(typeof c.page_num === "number" ? { pageNum: String(c.page_num) } : {}),
-        });
-        return {
-          id: `${c.doc_id ?? "doc"}-${idx}`,
-          label: `${c.doc_name ?? "未知文档"}${section ? ` · ${section}` : ""}${suffix}`,
-          href: params.toString() ? `/knowledge?${params.toString()}` : "/knowledge",
-        };
-      }),
+      display.citations.map((c, idx) =>
+        toCitationListItem(c, `${c.doc_id ?? "doc"}-${idx}`)
+      ),
     [display.citations]
   );
 
@@ -447,10 +645,13 @@ export function useSearchStream(options: UseSearchStreamOptions = {}) {
     steps: display.steps,
     thinkingTraces: display.thinkingTraces,
     error: display.error,
+    failedQuery: display.failedQuery,
     citations: display.citations,
     pendingQuery: display.pendingQuery,
     citationLabels,
+    queuedCount,
     start,
+    retryLastQuery,
     clearDisplay,
     stopCurrentStream,
     abortAllStreams,

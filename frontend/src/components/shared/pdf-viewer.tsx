@@ -22,9 +22,11 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 interface PdfViewerProps {
   url: string;
   className?: string;
+  /** 引用跳转时定位到指定页 */
+  initialPage?: number;
 }
 
-export function PdfViewer({ url, className }: PdfViewerProps) {
+export function PdfViewer({ url, className, initialPage }: PdfViewerProps) {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [scale, setScale] = useState(1.0);
@@ -36,7 +38,19 @@ export function PdfViewer({ url, className }: PdfViewerProps) {
     setNumPages(numPages);
     setLoading(false);
     setError(null);
+    if (initialPage && initialPage >= 1 && initialPage <= numPages) {
+      setPageNumber(initialPage);
+    }
   }
+
+  useEffect(() => {
+    if (initialPage && initialPage >= 1) {
+      setPageNumber((prev) => {
+        if (numPages && initialPage > numPages) return prev;
+        return initialPage;
+      });
+    }
+  }, [initialPage, url, numPages]);
 
   function onDocumentLoadError(err: Error) {
     console.error("PDF Load Error:", err);

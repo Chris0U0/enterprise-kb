@@ -52,6 +52,17 @@ export async function regenerateChatMessage(messageId: string): Promise<Regenera
   });
 }
 
+export async function savePartialAssistant(
+  sessionId: string,
+  content: string,
+  citations?: Array<Record<string, unknown>>
+): Promise<ChatMessage> {
+  return apiFetchJson<ChatMessage>(`/chat/sessions/${sessionId}/partial-assistant`, {
+    method: "POST",
+    json: { content, citations: citations ?? null },
+  });
+}
+
 export function useChatSessions(projectId: string | undefined) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [loading, setLoading] = useState(false);

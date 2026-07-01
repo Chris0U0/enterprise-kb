@@ -2,17 +2,20 @@
 
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { Bot, Loader2 } from "lucide-react";
+import { Bot, Loader2, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/copilot/markdown-content";
 import { CitationList } from "@/components/copilot/citation-list";
+import type { CitationListItem, CitationTarget } from "@/lib/citation-target";
 
 type StreamingMessageBubbleProps = {
   answer: string;
   error: string | null;
   running: boolean;
-  citationLabels: { id: string; label: string; href: string }[];
+  citationLabels: CitationListItem[];
   projectId: string;
-  onCitationClick?: (docId: string) => void;
+  onCitationClick?: (target: CitationTarget) => void;
+  onRetry?: () => void;
 };
 
 export function StreamingMessageBubble({
@@ -22,6 +25,7 @@ export function StreamingMessageBubble({
   citationLabels,
   projectId,
   onCitationClick,
+  onRetry,
 }: StreamingMessageBubbleProps) {
   const timeLabel = format(new Date(), "MM月dd日 HH:mm", { locale: zhCN });
 
@@ -53,7 +57,17 @@ export function StreamingMessageBubble({
               AI 正在思考并检索相关文档...
             </div>
           ) : null}
-          {error ? <p className="mt-2 text-sm font-medium text-destructive">{error}</p> : null}
+          {error ? (
+            <div className="mt-2 space-y-2">
+              <p className="text-sm font-medium text-destructive">{error}</p>
+              {onRetry ? (
+                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={onRetry}>
+                  <RotateCcw size={14} />
+                  重试
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
 
           {citationLabels.length > 0 && (
             <div className="mt-4 border-t border-border pt-4">

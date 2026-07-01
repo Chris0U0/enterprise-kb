@@ -53,6 +53,11 @@ class RenameSessionRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
 
 
+class PartialAssistantRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=32000)
+    citations: Optional[List] = None
+
+
 class MessageFeedbackRequest(BaseModel):
     rating: Optional[Literal["up", "down"]] = None
 
@@ -225,6 +230,43 @@ async def rename_chat_session(
     await db.commit()
     await db.refresh(session)
     return session
+
+
+@router.post("/sessions/{session_id}/partial-assistant", response_model=ChatMessageSchema)
+async def save_partial_assistant(
+    session_id: uuid.UUID,
+    body: PartialAssistantRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """停止生成时保存已输出的部分内容"""
+    await _get_owned_session(session_id, user, db)
+
+    last_result = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(1)
+    )
+    last = last_result.scalar_one_or_none()
+    if last and last.role == "assistant":
+        raise HTTPException(status_code=409, detail="上一条回复已保存，无需重复写入")
+
+    content = body.content.rstrip()
+    if not content.endswith("（已停止生成）"):
+        content = f"{content}\n\n（已停止生成）"
+
+    msg = ChatMessage(
+        session_id=session_id,
+        role="assistant",
+        content=content,
+        citations=body.citations,
+    )
+    db.add(msg)
+    await _touch_session(session_id, db)
+    await db.commit()
+    await db.refresh(msg)
+    return msg
 
 
 @router.delete("/sessions/{session_id}")

@@ -11,6 +11,7 @@ type CopilotChatInputProps = {
   onSend: () => void;
   onStop?: () => void;
   running?: boolean;
+  queuedCount?: number;
   disabled?: boolean;
   placeholder?: string;
 };
@@ -21,6 +22,7 @@ export function CopilotChatInput({
   onSend,
   onStop,
   running = false,
+  queuedCount = 0,
   disabled = false,
   placeholder = "询问关于项目的问题…",
 }: CopilotChatInputProps) {
@@ -53,7 +55,7 @@ export function CopilotChatInput({
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            if (!disabled && !running && value.trim()) onSend();
+            if (!disabled && value.trim()) onSend();
           }
         }}
         placeholder={placeholder}
@@ -83,15 +85,16 @@ export function CopilotChatInput({
           size="icon"
           type="button"
           className="h-9 w-9 bg-primary hover:bg-primary/90"
-          aria-label="发送"
-          disabled={disabled || running || !value.trim()}
+          aria-label={running ? "加入队列" : "发送"}
+          disabled={disabled || !value.trim()}
           onClick={onSend}
         >
           <Send size={18} />
         </Button>
       </div>
       <p className="border-t border-border/60 px-3 py-1.5 text-[10px] text-muted-foreground">
-        Enter 发送 · Shift+Enter 换行 · Esc 停止生成
+        Enter 发送{running ? "（将加入队列）" : ""} · Shift+Enter 换行 · Esc 停止生成
+        {queuedCount > 0 ? ` · 排队中 ${queuedCount} 条` : ""}
       </p>
     </div>
   );
